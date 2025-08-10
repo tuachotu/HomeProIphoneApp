@@ -21,6 +21,9 @@ struct WelcomeView: View {
                 // Profile Card
                 profileCard
                 
+                // Homes Section
+                homesSection
+                
                 // Features Preview (Collapsible)
                 featuresSection
                 
@@ -34,6 +37,20 @@ struct WelcomeView: View {
         }
         .background(DesignSystem.Colors.background)
         .navigationBarHidden(true)
+        .sequentialTapDeveloperGesture()
+        .onAppear {
+            print("🏠 WelcomeView appeared")
+            print("👤 Current user: \(authManager.backendUser?.name ?? "None")")
+            print("🏠 Number of homes: \(authManager.homes.count)")
+            
+            if authManager.homes.isEmpty && !authManager.isLoading {
+                print("🏠 Displaying empty state - no homes found")
+            } else if !authManager.homes.isEmpty {
+                print("🏠 Displaying \(authManager.homes.count) homes")
+            } else {
+                print("🔄 Loading homes...")
+            }
+        }
     }
     
     private var headerSection: some View {
@@ -189,6 +206,45 @@ struct WelcomeView: View {
             }
             
             Spacer()
+        }
+    }
+    
+    private var homesSection: some View {
+        VStack(alignment: .leading, spacing: DesignSystem.Spacing.lg) {
+            if authManager.homes.isEmpty && !authManager.isLoading {
+                // Empty state
+                VStack(spacing: DesignSystem.Spacing.md) {
+                    Text("Your Homes")
+                        .font(DesignSystem.Typography.headline)
+                        .foregroundColor(DesignSystem.Colors.textPrimary)
+                    
+                    Text("No homes found. Add your first home to get started!")
+                        .font(DesignSystem.Typography.callout)
+                        .foregroundColor(DesignSystem.Colors.textSecondary)
+                        .multilineTextAlignment(.center)
+                    
+                    HouseIconView(size: 48, systemName: "house.badge.plus")
+                }
+                .padding(DesignSystem.Spacing.xl)
+                .cardStyle()
+            } else if !authManager.homes.isEmpty {
+                // Homes list
+                VStack(alignment: .leading, spacing: DesignSystem.Spacing.md) {
+                    Text("Your Homes")
+                        .font(DesignSystem.Typography.headline)
+                        .foregroundColor(DesignSystem.Colors.textPrimary)
+                        .padding(.horizontal, DesignSystem.Spacing.lg)
+                    
+                    LazyVStack(spacing: DesignSystem.Spacing.md) {
+                        ForEach(authManager.homes) { home in
+                            HomeCardView(home: home)
+                                .onAppear {
+                                    print("🏠 HomeCard appeared for: \(home.address ?? "Unknown address")")
+                                }
+                        }
+                    }
+                }
+            }
         }
     }
     
