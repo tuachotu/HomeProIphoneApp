@@ -12,7 +12,9 @@ import FirebaseCore
 struct HomeProIphoneAppApp: App {
     
     init() {
+        print("🚀 HomePro app starting up...")
         FirebaseApp.configure()
+        print("✅ Firebase configured successfully")
     }
     
     var body: some Scene {

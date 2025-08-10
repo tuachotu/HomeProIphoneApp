@@ -18,6 +18,7 @@ struct AuthenticationView: View {
             } else {
                 LoginView()
                     .environmentObject(authManager)
+                    .sequentialTapDeveloperGesture()
             }
         }
     }
