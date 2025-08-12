@@ -12,8 +12,8 @@ struct AuthenticationView: View {
     
     var body: some View {
         NavigationStack {
-            if authManager.user != nil {
-                WelcomeView()
+            if authManager.user != nil && authManager.backendUser != nil {
+                MainTabView()
                     .environmentObject(authManager)
             } else {
                 LoginView()
