@@ -10,6 +10,7 @@ import SwiftUI
 struct HomeTabView: View {
     @EnvironmentObject var authManager: AuthenticationManager
     @State private var showingProfileDetails = false
+    @State private var showingAddHome = false
     
     var body: some View {
         ScrollView {
@@ -26,6 +27,15 @@ struct HomeTabView: View {
             .padding(.top, DesignSystem.Spacing.lg)
         }
         .background(DesignSystem.Colors.background)
+        .sheet(isPresented: $showingAddHome) {
+            AddHomeView {
+                // Refresh homes list when new home is added
+                Task {
+                    await authManager.refreshHomes()
+                }
+            }
+            .environmentObject(authManager)
+        }
         .onAppear {
             print("🏠 HomeTabView appeared")
             print("👤 Current user: \(authManager.backendUser?.name ?? "None")")
@@ -130,18 +140,30 @@ struct HomeTabView: View {
     private var homesSection: some View {
         VStack(alignment: .leading, spacing: DesignSystem.Spacing.lg) {
             if authManager.homes.isEmpty && !authManager.isLoading {
-                // Empty state
+                // Empty state with Add Home button
                 VStack(spacing: DesignSystem.Spacing.md) {
                     Text("Your Homes")
                         .font(DesignSystem.Typography.headline)
                         .foregroundColor(DesignSystem.Colors.textPrimary)
                     
-                    Text("No homes found. Contact support to add your first home!")
+                    Text("No homes found yet. Add your first home to get started!")
                         .font(DesignSystem.Typography.callout)
                         .foregroundColor(DesignSystem.Colors.textSecondary)
                         .multilineTextAlignment(.center)
                     
-                    HouseIconView(size: 48, systemName: "house.badge.plus")
+                    Button(action: {
+                        showingAddHome = true
+                    }) {
+                        VStack(spacing: DesignSystem.Spacing.sm) {
+                            HouseIconView(size: 48, systemName: "house.badge.plus")
+                            
+                            Text("Add New Home")
+                                .font(DesignSystem.Typography.callout)
+                                .fontWeight(.medium)
+                                .foregroundColor(DesignSystem.Colors.primary)
+                        }
+                    }
+                    .buttonStyle(PlainButtonStyle())
                 }
                 .padding(DesignSystem.Spacing.xl)
                 .cardStyle()
@@ -160,6 +182,9 @@ struct HomeTabView: View {
                                     print("🏠 HomeCard appeared for: \(home.address ?? "Unknown address")")
                                 }
                         }
+                        
+                        // Add New Home button
+                        addHomeButton
                     }
                 }
             } else {
@@ -176,6 +201,32 @@ struct HomeTabView: View {
                 .cardStyle()
             }
         }
+    }
+    
+    private var addHomeButton: some View {
+        Button(action: {
+            showingAddHome = true
+        }) {
+            HStack(spacing: DesignSystem.Spacing.sm) {
+                Image(systemName: "plus.circle.fill")
+                    .foregroundColor(DesignSystem.Colors.primary)
+                    .font(.title3)
+                
+                Text("Add New Home")
+                    .font(DesignSystem.Typography.callout)
+                    .fontWeight(.medium)
+                    .foregroundColor(DesignSystem.Colors.primary)
+            }
+            .padding(.vertical, DesignSystem.Spacing.md)
+            .padding(.horizontal, DesignSystem.Spacing.lg)
+            .background(
+                RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.sm)
+                    .fill(DesignSystem.Colors.primary.opacity(0.1))
+                    .stroke(DesignSystem.Colors.primary, lineWidth: 1)
+            )
+        }
+        .buttonStyle(PlainButtonStyle())
+        .padding(.top, DesignSystem.Spacing.sm)
     }
     
     private func signOut() {

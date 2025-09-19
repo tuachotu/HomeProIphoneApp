@@ -144,6 +144,24 @@ class AuthenticationManager: ObservableObject {
         }
     }
     
+    func refreshHomes() async {
+        guard let user = user, let backendUser = backendUser else {
+            print("❌ Cannot refresh homes - user not authenticated")
+            return
+        }
+        
+        do {
+            print("🔄 Refreshing homes...")
+            let firebaseToken = try await user.getIDToken()
+            await fetchHomes(userId: backendUser.id, firebaseToken: firebaseToken)
+        } catch {
+            print("❌ Error refreshing homes: \(error)")
+            await MainActor.run {
+                authError = "Failed to refresh homes: \(error.localizedDescription)"
+            }
+        }
+    }
+    
     private func authenticateWithBackend() async {
         print("🔗 Starting backend authentication...")
         guard let firebaseUser = user else { 

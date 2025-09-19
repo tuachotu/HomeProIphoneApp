@@ -11,21 +11,25 @@ struct HomeCardView: View {
     let home: Home
     @State private var photos: [Photo] = []
     @State private var isLoadingPhotos = false
+    @State private var showingItemsList = false
     @EnvironmentObject var authManager: AuthenticationManager
     
     var body: some View {
-        VStack(alignment: .leading, spacing: DesignSystem.Spacing.md) {
-            // Home Photo
-            homePhotoSection
-            
-            // Home Info
-            homeInfoSection
-            
-            // Stats Section
-            statsSection
+        NavigationLink(destination: HomeDetailView(home: home)) {
+            VStack(alignment: .leading, spacing: DesignSystem.Spacing.md) {
+                // Home Photo
+                homePhotoSection
+                
+                // Home Info
+                homeInfoSection
+                
+                // Stats Section
+                statsSection
+            }
+            .padding(DesignSystem.Spacing.lg)
+            .cardStyle()
         }
-        .padding(DesignSystem.Spacing.lg)
-        .cardStyle()
+        .buttonStyle(PlainButtonStyle())
         .onAppear {
             print("🏠 HomeCardView appeared for home: \(home.address ?? "Unknown")")
             loadHomePhotos()
@@ -96,16 +100,24 @@ struct HomeCardView: View {
     }
     
     private var statsSection: some View {
-        HStack(spacing: DesignSystem.Spacing.lg) {
-            statItem(icon: "square.grid.3x3", value: "\(home.stats.totalItems)", label: "Items")
-            statItem(icon: "photo", value: "\(home.stats.totalPhotos)", label: "Photos")
-            if home.stats.emergencyItems > 0 {
-                statItem(icon: "exclamationmark.triangle.fill", value: "\(home.stats.emergencyItems)", label: "Emergency", color: DesignSystem.Colors.error)
+        Button(action: {
+            showingItemsList = true
+        }) {
+            HStack(spacing: DesignSystem.Spacing.lg) {
+                statItemContent(icon: "square.grid.3x3", value: "\(home.stats.totalItems)", label: "Items", color: DesignSystem.Colors.primary)
+                Spacer()
             }
+        }
+        .buttonStyle(PlainButtonStyle())
+        .contentShape(Rectangle())
+        .sheet(isPresented: $showingItemsList) {
+            HomeItemsListView(home: home)
+                .environmentObject(authManager)
         }
     }
     
-    private func statItem(icon: String, value: String, label: String, color: Color = DesignSystem.Colors.primary) -> some View {
+    
+    private func statItemContent(icon: String, value: String, label: String, color: Color) -> some View {
         VStack(spacing: DesignSystem.Spacing.xs) {
             HStack(spacing: DesignSystem.Spacing.xs) {
                 Image(systemName: icon)
