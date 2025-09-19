@@ -30,6 +30,10 @@ struct DesignSystem {
         // Semantic colors
         static let error = Color(red: 0.90, green: 0.30, blue: 0.30)
         static let success = Color(red: 0.20, green: 0.70, blue: 0.40)
+        
+        // Additional colors
+        static let secondary = Color(red: 0.87, green: 0.91, blue: 0.96) // Light blue
+        static let border = Color(red: 0.90, green: 0.90, blue: 0.92)
     }
     
     // MARK: - Typography
@@ -37,6 +41,7 @@ struct DesignSystem {
         static let largeTitle = Font.system(size: 32, weight: .light, design: .default)
         static let title1 = Font.system(size: 26, weight: .medium, design: .default)
         static let title2 = Font.system(size: 20, weight: .medium, design: .default)
+        static let title3 = Font.system(size: 18, weight: .medium, design: .default)
         static let headline = Font.system(size: 16, weight: .medium, design: .default)
         static let body = Font.system(size: 16, weight: .regular, design: .default)
         static let callout = Font.system(size: 15, weight: .regular, design: .default)
