@@ -9,6 +9,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Run in Simulator**: `⌘+R` (or Product → Run)  
 - **Clean Build**: `⌘+Shift+K` (or Product → Clean Build Folder)
 - **Archive for Release**: Product → Archive (for App Store/TestFlight builds)
+- **Switch Scheme**: Use scheme selector next to Run/Stop buttons to switch between targets
 
 ### Testing
 - **Run Unit Tests**: `⌘+U` (or Product → Test)
@@ -25,15 +26,23 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Architecture Overview
 
-This is a SwiftUI iOS app with Firebase authentication and custom backend integration. The app follows MVVM architecture patterns with ObservableObject managers.
+This is a SwiftUI iOS app with Firebase authentication and custom backend integration. The app follows MVVM architecture patterns with ObservableObject managers and uses a tab-based navigation structure with a main home management interface.
 
 ### Key Components
 
 #### Authentication Flow
 - **AuthenticationManager**: Centralized Firebase auth state management with backend token validation
 - **Entry Point**: `AuthenticationView` handles the main auth flow logic
+- **Post-Login Navigation**: `MainTabView` serves as the main interface with tab-based navigation
 - **Persistence**: Firebase automatically handles login persistence across app launches
 - **Backend Integration**: Custom API validates Firebase tokens and returns user roles
+
+#### Tab Navigation Structure
+- **MainTabView**: Primary navigation container with three tabs (Home, Expert, Resources)
+- **HomeTabView**: Main home management interface with profile card and homes list
+- **ExpertTabView**: Professional services (under construction)
+- **ResourcesTabView**: Educational content and guides (under construction)
+- **Emergency Button**: Global emergency information access in navigation bar
 
 #### Design System
 - **Centralized Styling**: `DesignSystem.swift` contains all colors, typography, spacing, and reusable modifiers
@@ -51,7 +60,13 @@ This is a SwiftUI iOS app with Firebase authentication and custom backend integr
 - **BackendUser**: User profile data from custom backend (id, name, roles)
 - **Home**: Home data with address, role, timestamps, and stats
 - **HomeStats**: Statistics (total items, photos, emergency items)
+- **HomeItem**: Individual home inventory items with type, data, and photo count
+- **HomeItemType**: Enum for item categories (appliance, utility_control, room, etc.)
 - **Photo**: Photo data with pre-signed S3 URLs and metadata
+- **EmergencyInfo**: Emergency home information (gas/water/electrical shutoffs, notes)
+- **CreateHomeItemRequest/Response**: API request/response models for item creation
+- **PhotoUploadResponse**: Response model for photo uploads
+- **AnyCodable**: Helper for flexible JSON data handling
 - **Role System**: "homeowner" role detection and display
 - **APIError**: Structured error handling for network operations
 
@@ -61,12 +76,24 @@ HomeProIphoneApp/
 ├── HomeProIphoneAppApp.swift       # App entry point with Firebase initialization
 ├── AuthenticationManager.swift     # Firebase + backend auth state + homes management
 ├── APIService.swift                # Backend API client (login, homes, photos)
-├── UserModel.swift                 # Data models (BackendUser, Home, HomeStats, Photo) and errors
+├── UserModel.swift                 # Data models (BackendUser, Home, HomeStats, Photo, EmergencyInfo) and errors
 ├── DesignSystem.swift             # UI system (colors, fonts, modifiers)
 ├── AuthenticationView.swift       # Main auth flow controller
 ├── LoginView.swift                # Login form UI
-├── WelcomeView.swift             # Post-login dashboard with homes display
-├── HomeCardView.swift            # Individual home card component with photos
+├── WelcomeView.swift             # Post-login dashboard with homes display (legacy - replaced by MainTabView)
+├── MainTabView.swift             # Main tab navigation container (current main view)
+├── HomeTabView.swift             # Home tab content with profile card and homes list
+├── ExpertTabView.swift           # Expert tab (under construction)
+├── ResourcesTabView.swift        # Resources tab (under construction)
+├── EmergencyInfoView.swift       # Emergency information modal and management
+├── HomeCardView.swift            # Individual home card component with photos (navigates to HomeDetailView)
+├── HomeDetailView.swift         # Detailed home view with items management
+├── AddHomeView.swift            # Form for adding new homes with address and role selection
+├── AddHomeItemView.swift        # Form for adding new home items with type-specific fields
+├── HomeItemsListView.swift      # List view for home items with filtering and management
+├── HomeItemDetailView.swift     # Detailed view for individual home items
+├── ItemPhotosView.swift         # Photo management for individual home items
+├── PhotoUploadView.swift        # Photo upload interface with progress tracking
 ├── PasswordResetView.swift       # Password reset flow
 ├── InviteOnlyView.swift          # Beta access messaging
 ├── HouseIconView.swift           # Reusable icon component
@@ -94,8 +121,20 @@ HomeProIphoneApp/
   - Response: User object with id, name, and roles
 - **Get Homes**: GET `/api/homes?userId={userId}`
   - Response: Array of homes with stats (total items, photos, emergency items)
-- **Get Photos**: GET `/api/photos?homeId={homeId}`
+- **Create Home**: POST `/api/homes`
+  - Request: Address, role (owner/tenant/manager)
+  - Response: Created home with generated ID
+- **Get Home Items**: GET `/api/homes/{homeId}/items`
+  - Response: Array of home items with photo counts and metadata
+  - Supports filtering by type, emergency status, pagination
+- **Create Home Item**: POST `/api/homes/{homeId}/items`
+  - Request: Item name, type, emergency flag, optional JSON data
+  - Response: Created item with generated ID
+- **Get Photos**: GET `/api/photos?homeId={homeId}` or `?homeItemId={itemId}`
   - Response: Array of photos with pre-signed S3 URLs (valid for 1 hour)
+- **Upload Photo**: POST `/api/photos?homeItemId={itemId}`
+  - Request: Multipart form data with photo file
+  - Response: Upload confirmation with pre-signed URL
 
 ## Development Notes
 
@@ -175,12 +214,12 @@ The app includes a hidden developer settings panel accessible via secret gesture
 
 ### Development Environment
 - **Xcode**: 15.0+ (required for iOS 17+ deployment targets)
-- **iOS Deployment Target**: 16.0+ 
-- **Swift Version**: 5.9+
+- **iOS Deployment Target**: 16.0+ (current project setting)
+- **Swift Version**: 5.9+ (current project setting)
 - **macOS**: Required for Xcode and iOS development
 
 ### Runtime Requirements
-- **iOS**: 16.0+
+- **iOS**: 16.0+ (based on deployment target)
 - **Device Support**: iPhone only (optimized for iPhone 12+ screen sizes)
 - **Orientation**: Portrait only
 - **Network**: Internet connection required for Firebase auth and API calls

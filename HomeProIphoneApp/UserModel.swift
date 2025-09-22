@@ -85,6 +85,34 @@ struct Photo: Codable, Identifiable {
     }
 }
 
+struct EmergencyInfo: Codable, Identifiable {
+    let id: String
+    let homeId: String
+    let gasShutoffLocation: String?
+    let waterShutoffLocation: String?
+    let electricalMainLocation: String?
+    let additionalNotes: String?
+    let createdAt: String
+    let updatedAt: String
+    
+    enum CodingKeys: String, CodingKey {
+        case id, additionalNotes
+        case homeId = "home_id"
+        case gasShutoffLocation = "gas_shutoff_location"
+        case waterShutoffLocation = "water_shutoff_location"
+        case electricalMainLocation = "electrical_main_location"
+        case createdAt = "created_at"
+        case updatedAt = "updated_at"
+    }
+    
+    var hasAnyInformation: Bool {
+        return gasShutoffLocation != nil || 
+               waterShutoffLocation != nil || 
+               electricalMainLocation != nil ||
+               (additionalNotes?.isEmpty == false)
+    }
+}
+
 enum APIError: Error, LocalizedError {
     case invalidURL
     case noData
