@@ -9,15 +9,23 @@ import Foundation
 
 class APIService: ObservableObject {
     static let shared = APIService()
-    
+
     @Published private(set) var baseURL: String {
         didSet {
             UserDefaults.standard.set(baseURL, forKey: "APIBaseURL")
         }
     }
-    
+
     private let defaultBaseURL = "https://home-owners.tech/api"
     private let baseURLKey = "APIBaseURL"
+
+    // URLSession with timeout configuration
+    private lazy var urlSession: URLSession = {
+        let config = URLSessionConfiguration.default
+        config.timeoutIntervalForRequest = 30.0  // 30 seconds timeout
+        config.timeoutIntervalForResource = 60.0  // 60 seconds total timeout
+        return URLSession(configuration: config)
+    }()
     
     private init() {
         // Load saved base URL or use default
@@ -50,7 +58,7 @@ class APIService: ObservableObject {
         
         do {
             print("🌐 Making login request to: \(url.absoluteString)")
-            let (data, response) = try await URLSession.shared.data(for: request)
+            let (data, response) = try await urlSession.data(for: request)
             
             guard let httpResponse = response as? HTTPURLResponse else {
                 print("❌ Invalid response type")
@@ -107,7 +115,7 @@ class APIService: ObservableObject {
         
         do {
             print("🏠 Making homes request to: \(url.absoluteString)")
-            let (data, response) = try await URLSession.shared.data(for: request)
+            let (data, response) = try await urlSession.data(for: request)
             
             guard let httpResponse = response as? HTTPURLResponse else {
                 print("❌ Invalid homes response type")
@@ -164,7 +172,7 @@ class APIService: ObservableObject {
         
         do {
             print("📸 Making photos request to: \(url.absoluteString)")
-            let (data, response) = try await URLSession.shared.data(for: request)
+            let (data, response) = try await urlSession.data(for: request)
             
             guard let httpResponse = response as? HTTPURLResponse else {
                 print("❌ Invalid photos response type")
@@ -235,7 +243,7 @@ class APIService: ObservableObject {
         
         do {
             print("🏠 Making home items request to: \(url.absoluteString)")
-            let (data, response) = try await URLSession.shared.data(for: request)
+            let (data, response) = try await urlSession.data(for: request)
             
             guard let httpResponse = response as? HTTPURLResponse else {
                 print("❌ Invalid home items response type")
@@ -280,7 +288,84 @@ class APIService: ObservableObject {
             }
         }
     }
-    
+
+    // Simple version that exactly matches the working curl request - no query parameters
+    func getHomeItemsSimple(for homeId: String, firebaseToken: String) async throws -> [HomeItem] {
+        guard let url = URL(string: "\(baseURL)/homes/\(homeId)/items") else {
+            throw APIError.invalidURL
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.setValue("application/json, text/plain, */*", forHTTPHeaderField: "Accept")
+        request.setValue("en-US,en;q=0.9", forHTTPHeaderField: "Accept-Language")
+        request.setValue("Bearer \(firebaseToken)", forHTTPHeaderField: "Authorization")
+        request.setValue("keep-alive", forHTTPHeaderField: "Connection")
+        request.setValue("https://home-owners.tech/", forHTTPHeaderField: "Referer")
+        request.setValue("empty", forHTTPHeaderField: "Sec-Fetch-Dest")
+        request.setValue("cors", forHTTPHeaderField: "Sec-Fetch-Mode")
+        request.setValue("same-origin", forHTTPHeaderField: "Sec-Fetch-Site")
+        request.setValue("Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1", forHTTPHeaderField: "User-Agent")
+
+        do {
+            print("🚨 Making SIMPLE home items request to: \(url.absoluteString)")
+            print("🚨 Request headers: \(request.allHTTPHeaderFields ?? [:])")
+
+            let (data, response) = try await urlSession.data(for: request)
+
+            guard let httpResponse = response as? HTTPURLResponse else {
+                print("❌ Invalid home items response type")
+                throw APIError.networkError("Invalid response")
+            }
+
+            print("🚨 Simple home items response status: \(httpResponse.statusCode)")
+            if let responseString = String(data: data, encoding: .utf8) {
+                print("🚨 Simple home items response body: \(responseString)")
+            }
+
+            switch httpResponse.statusCode {
+            case 200:
+                guard !data.isEmpty else {
+                    print("⚠️ Empty response data for home items")
+                    return []
+                }
+
+                let homeItems = try JSONDecoder().decode([HomeItem].self, from: data)
+                print("🚨 Successfully decoded \(homeItems.count) home items")
+
+                // Log each item's emergency status
+                for item in homeItems {
+                    print("🚨   Item: \(item.name) - Emergency: \(item.isEmergency)")
+                }
+
+                return homeItems
+            case 401:
+                print("❌ Unauthorized (401) - Token might be expired")
+                throw APIError.unauthorized
+            case 403:
+                print("❌ Forbidden (403) - Access denied")
+                throw APIError.forbidden
+            case 404:
+                print("❌ Not Found (404) - Home might not exist")
+                throw APIError.networkError("Home not found")
+            default:
+                print("❌ Server error (\(httpResponse.statusCode))")
+                if let errorBody = String(data: data, encoding: .utf8), !errorBody.isEmpty {
+                    print("   Server error message: \(errorBody)")
+                }
+                throw APIError.serverError(httpResponse.statusCode)
+            }
+
+        } catch {
+            print("❌ Network or decoding error: \(error)")
+            if error is APIError {
+                throw error
+            } else {
+                throw APIError.networkError(error.localizedDescription)
+            }
+        }
+    }
+
     func createHomeItem(for homeId: String, name: String, itemType: HomeItemType, isEmergency: Bool = false, data: String? = nil, firebaseToken: String) async throws -> CreateHomeItemResponse {
         guard let url = URL(string: "\(baseURL)/homes/\(homeId)/items") else {
             throw APIError.invalidURL
@@ -307,7 +392,7 @@ class APIService: ObservableObject {
             print("🏠 Making create home item request to: \(url.absoluteString)")
             print("📄 Request body: \(String(data: jsonData, encoding: .utf8) ?? "nil")")
             
-            let (data, response) = try await URLSession.shared.data(for: request)
+            let (data, response) = try await urlSession.data(for: request)
             
             guard let httpResponse = response as? HTTPURLResponse else {
                 print("❌ Invalid create home item response type")
@@ -368,7 +453,7 @@ class APIService: ObservableObject {
         
         do {
             print("📸 Making home item photos request to: \(url.absoluteString)")
-            let (data, response) = try await URLSession.shared.data(for: request)
+            let (data, response) = try await urlSession.data(for: request)
             
             guard let httpResponse = response as? HTTPURLResponse else {
                 print("❌ Invalid home item photos response type")
@@ -474,7 +559,7 @@ class APIService: ObservableObject {
             print("📸 Making upload photo request to: \(url.absoluteString)")
             print("📄 Uploading file: \(fileName) (\(imageData.count) bytes)")
             
-            let (data, response) = try await URLSession.shared.data(for: request)
+            let (data, response) = try await urlSession.data(for: request)
             
             guard let httpResponse = response as? HTTPURLResponse else {
                 print("❌ Invalid upload photo response type")
@@ -574,7 +659,7 @@ class APIService: ObservableObject {
             print("🏠 Making create home request to: \(url.absoluteString)")
             print("📄 Request body: \(String(data: jsonData, encoding: .utf8) ?? "nil")")
             
-            let (data, response) = try await URLSession.shared.data(for: request)
+            let (data, response) = try await urlSession.data(for: request)
             
             guard let httpResponse = response as? HTTPURLResponse else {
                 print("❌ Invalid create home response type")

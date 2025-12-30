@@ -30,10 +30,11 @@ This is a SwiftUI iOS app with Firebase authentication and custom backend integr
 ### Key Components
 
 #### Authentication Flow
-- **AuthenticationManager**: Centralized Firebase auth state management with backend token validation
+- **AuthenticationManager**: Centralized Firebase auth state management with backend token validation and complete app state management
 - **Entry Point**: `AuthenticationView` handles the main auth flow logic
 - **Persistence**: Firebase automatically handles login persistence across app launches
 - **Backend Integration**: Custom API validates Firebase tokens and returns user roles
+- **State Management**: Handles homes, items, photos, and user data throughout app lifecycle
 
 #### Design System
 - **Centralized Styling**: `DesignSystem.swift` contains all colors, typography, spacing, and reusable modifiers
@@ -51,6 +52,8 @@ This is a SwiftUI iOS app with Firebase authentication and custom backend integr
 - **BackendUser**: User profile data from custom backend (id, name, roles)
 - **Home**: Home data with address, role, timestamps, and stats
 - **HomeStats**: Statistics (total items, photos, emergency items)
+- **HomeItem**: Individual home items with type, photos, emergency status
+- **HomeItemType**: Enum for item categories (appliance, furniture, etc.)
 - **Photo**: Photo data with pre-signed S3 URLs and metadata
 - **Role System**: "homeowner" role detection and display
 - **APIError**: Structured error handling for network operations
@@ -60,23 +63,35 @@ This is a SwiftUI iOS app with Firebase authentication and custom backend integr
 HomeProIphoneApp/
 ├── HomeProIphoneAppApp.swift       # App entry point with Firebase initialization
 ├── AuthenticationManager.swift     # Firebase + backend auth state + homes management
-├── APIService.swift                # Backend API client (login, homes, photos)
-├── UserModel.swift                 # Data models (BackendUser, Home, HomeStats, Photo) and errors
+├── APIService.swift                # Backend API client (login, homes, photos, items)
+├── UserModel.swift                 # Core data models (BackendUser, Home, HomeStats, Photo, HomeItem)
 ├── DesignSystem.swift             # UI system (colors, fonts, modifiers)
 ├── AuthenticationView.swift       # Main auth flow controller
 ├── LoginView.swift                # Login form UI
-├── WelcomeView.swift             # Post-login dashboard with homes display
-├── HomeCardView.swift            # Individual home card component with photos
-├── PasswordResetView.swift       # Password reset flow
-├── InviteOnlyView.swift          # Beta access messaging
-├── HouseIconView.swift           # Reusable icon component
-├── ImageCacheManager.swift       # Smart image caching system
-├── CachedAsyncImage.swift        # Cached AsyncImage component
-├── DeveloperModeGesture.swift    # Hidden developer mode activation
-├── DeveloperSettingsView.swift   # Developer settings panel with cache management
-├── ThreeFingerGesture.swift      # Alternative developer mode trigger
-├── SignUpView.swift              # Unused signup form
-└── ContentView.swift             # Legacy view (not used)
+├── MainTabView.swift              # Main app tab interface
+├── HomeTabView.swift              # Home tab with profile and homes list
+├── ExpertTabView.swift            # Expert services tab (under construction)
+├── ResourcesTabView.swift         # Resources and guides tab (under construction)
+├── HomeDetailView.swift           # Individual home detail page
+├── HomeCardView.swift             # Individual home card component with photos
+├── HomeItemsListView.swift        # Home items listing view
+├── HomeItemDetailView.swift       # Individual item detail view
+├── AddHomeView.swift              # Add new home form
+├── AddHomeItemView.swift          # Add new home item form
+├── PhotoUploadView.swift          # Photo upload interface
+├── ItemPhotosView.swift           # Item photo management
+├── EmergencyInfoView.swift        # Emergency information display
+├── WelcomeView.swift              # Legacy dashboard (replaced by MainTabView)
+├── PasswordResetView.swift        # Password reset flow
+├── InviteOnlyView.swift           # Beta access messaging
+├── HouseIconView.swift            # Reusable icon component
+├── ImageCacheManager.swift        # Smart image caching system
+├── CachedAsyncImage.swift         # Cached AsyncImage component
+├── DeveloperModeGesture.swift     # Hidden developer mode activation
+├── DeveloperSettingsView.swift    # Developer settings panel with cache management
+├── ThreeFingerGesture.swift       # Alternative developer mode trigger
+├── SignUpView.swift               # Unused signup form
+└── ContentView.swift              # Legacy view (not used)
 ```
 
 ### Firebase Configuration
@@ -96,11 +111,34 @@ HomeProIphoneApp/
   - Response: Array of homes with stats (total items, photos, emergency items)
 - **Get Photos**: GET `/api/photos?homeId={homeId}`
   - Response: Array of photos with pre-signed S3 URLs (valid for 1 hour)
+- **Get Home Items**: GET `/api/homes/{homeId}/items`
+  - Response: Array of home items with details and photo counts
+- **Create Home Item**: POST `/api/homes/{homeId}/items`
+  - Request: Item data (name, type, emergency status)
+- **Upload Photos**: POST `/api/items/{itemId}/photos`
+  - Request: Photo file upload for items
 
 ## Development Notes
 
+### Current App Architecture
+The app has evolved into a full tab-based interface with three main sections:
+
+#### Main Navigation Flow
+1. **Authentication**: `AuthenticationView` → `LoginView` → Firebase Auth
+2. **Main App**: `MainTabView` with three tabs:
+   - **Home Tab** (`HomeTabView`): User profile, homes list, and home management
+   - **Expert Tab** (`ExpertTabView`): Professional services (under construction)
+   - **Resources Tab** (`ResourcesTabView`): Guides and documentation (under construction)
+
+#### Home Management Flow
+- **Home Display**: Cards showing homes with photos and statistics
+- **Home Details**: `HomeDetailView` with item management
+- **Item Management**: `HomeItemsListView` → `HomeItemDetailView` → `AddHomeItemView`
+- **Photo Management**: `PhotoUploadView` and `ItemPhotosView` for image handling
+- **Emergency Info**: Accessible via emergency button in navigation
+
 ### Authentication State Management
-The app uses Firebase Auth for primary authentication, then validates tokens with a custom backend. The `AuthenticationManager` publishes both Firebase and backend user states, allowing views to react to authentication changes.
+The app uses Firebase Auth for primary authentication, then validates tokens with a custom backend. The `AuthenticationManager` publishes both Firebase and backend user states, allowing views to react to authentication changes and managing the complete homes/items data flow.
 
 ### Design Principles
 - Clean, professional interface optimized for iPhone
