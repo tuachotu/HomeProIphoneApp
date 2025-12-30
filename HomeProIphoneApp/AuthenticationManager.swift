@@ -216,4 +216,23 @@ class AuthenticationManager: ObservableObject {
             print("❌ Error fetching homes: \(error.localizedDescription)")
         }
     }
+
+    // Reset any stuck states when app becomes active
+    func refreshAppState() async {
+        print("🔄 Refreshing app state after becoming active")
+
+        await MainActor.run {
+            // Reset any stuck loading states
+            if isLoading {
+                print("⚠️ Resetting stuck loading state")
+                isLoading = false
+            }
+        }
+
+        // Refresh homes if we have a user
+        if user != nil && backendUser != nil {
+            print("🔄 Refreshing homes data")
+            await refreshHomes()
+        }
+    }
 }

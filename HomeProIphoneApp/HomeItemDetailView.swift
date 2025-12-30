@@ -55,6 +55,7 @@ struct HomeItemDetailView: View {
                 photos: photos,
                 currentIndex: $currentPhotoIndex
             )
+            .environmentObject(authManager)
         }
         .sheet(isPresented: $showingPhotoUpload) {
             PhotoUploadView(homeItem: homeItem) {

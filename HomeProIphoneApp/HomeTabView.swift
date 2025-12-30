@@ -9,18 +9,17 @@ import SwiftUI
 
 struct HomeTabView: View {
     @EnvironmentObject var authManager: AuthenticationManager
-    @State private var showingProfileDetails = false
     @State private var showingAddHome = false
     
     var body: some View {
         ScrollView {
             VStack(spacing: DesignSystem.Spacing.xl) {
-                // Profile Card
-                profileCard
-                
+                // Welcome Text (plain, no card)
+                welcomeText
+
                 // Homes Section
                 homesSection
-                
+
                 Spacer(minLength: DesignSystem.Spacing.xxl)
             }
             .padding(.horizontal, DesignSystem.Spacing.lg)
@@ -51,96 +50,30 @@ struct HomeTabView: View {
         }
     }
     
-    private var profileCard: some View {
-        VStack(spacing: DesignSystem.Spacing.md) {
-            HStack {
-                VStack(alignment: .leading, spacing: DesignSystem.Spacing.xs) {
-                    if let backendUser = authManager.backendUser {
-                        Text("Welcome back, \(backendUser.name)")
-                            .font(DesignSystem.Typography.headline)
-                            .foregroundColor(DesignSystem.Colors.textPrimary)
-                        
-                        HStack(spacing: DesignSystem.Spacing.xs) {
-                            Image(systemName: "person.circle.fill")
-                                .foregroundColor(DesignSystem.Colors.primary)
-                                .font(.caption)
-                            Text(backendUser.roleDisplayName)
-                                .font(DesignSystem.Typography.callout)
-                                .foregroundColor(DesignSystem.Colors.textSecondary)
-                        }
-                    } else if authManager.isLoading {
-                        HStack(spacing: DesignSystem.Spacing.sm) {
-                            ProgressView()
-                                .scaleEffect(0.8)
-                            Text("Loading profile...")
-                                .font(DesignSystem.Typography.callout)
-                                .foregroundColor(DesignSystem.Colors.textSecondary)
-                        }
-                    }
-                }
-                
-                Spacer()
-                
-                Button {
-                    withAnimation(.easeInOut(duration: 0.3)) {
-                        showingProfileDetails.toggle()
-                    }
-                } label: {
-                    Image(systemName: showingProfileDetails ? "chevron.up" : "chevron.down")
-                        .foregroundColor(DesignSystem.Colors.primary)
-                        .font(.system(size: 14, weight: .medium))
+    private var welcomeText: some View {
+        HStack {
+            if let backendUser = authManager.backendUser {
+                Text("Welcome back, \(backendUser.name)")
+                    .font(DesignSystem.Typography.title2)
+                    .foregroundColor(DesignSystem.Colors.textPrimary)
+            } else if authManager.isLoading {
+                HStack(spacing: DesignSystem.Spacing.sm) {
+                    ProgressView()
+                        .scaleEffect(0.8)
+                    Text("Loading...")
+                        .font(DesignSystem.Typography.title2)
+                        .foregroundColor(DesignSystem.Colors.textSecondary)
                 }
             }
-            
-            if showingProfileDetails {
-                VStack(spacing: DesignSystem.Spacing.sm) {
-                    Divider()
-                    
-                    if let userEmail = authManager.user?.email {
-                        HStack {
-                            Image(systemName: "envelope")
-                                .foregroundColor(DesignSystem.Colors.textTertiary)
-                            Text(userEmail)
-                                .font(DesignSystem.Typography.callout)
-                                .foregroundColor(DesignSystem.Colors.textSecondary)
-                            Spacer()
-                        }
-                    }
-                    
-                    if let error = authManager.authError {
-                        HStack {
-                            Image(systemName: "exclamationmark.triangle")
-                                .foregroundColor(DesignSystem.Colors.error)
-                            Text(error)
-                                .font(DesignSystem.Typography.caption)
-                                .foregroundColor(DesignSystem.Colors.error)
-                            Spacer()
-                        }
-                    }
-                    
-                    // Sign out button
-                    Button {
-                        signOut()
-                    } label: {
-                        HStack {
-                            Image(systemName: "rectangle.portrait.and.arrow.right")
-                            Text("Sign Out")
-                        }
-                        .font(DesignSystem.Typography.callout)
-                        .foregroundColor(DesignSystem.Colors.error)
-                    }
-                }
-                .transition(.opacity.combined(with: .move(edge: .top)))
-            }
+
+            Spacer()
         }
-        .padding(DesignSystem.Spacing.lg)
-        .cardStyle()
     }
     
     private var homesSection: some View {
         VStack(alignment: .leading, spacing: DesignSystem.Spacing.lg) {
             if authManager.homes.isEmpty && !authManager.isLoading {
-                // Empty state with Add Home button
+                // Empty state with Add Home button (allows adding first home)
                 VStack(spacing: DesignSystem.Spacing.md) {
                     Text("Your Homes")
                         .font(DesignSystem.Typography.headline)
@@ -182,9 +115,10 @@ struct HomeTabView: View {
                                     print("🏠 HomeCard appeared for: \(home.address ?? "Unknown address")")
                                 }
                         }
-                        
-                        // Add New Home button
-                        addHomeButton
+
+                        // Add New Home button - REMOVED to limit users to 1 home
+                        // Backend still supports multiple homes, just hiding the UI button
+                        // Will be re-enabled later
                     }
                 }
             } else {
@@ -229,14 +163,6 @@ struct HomeTabView: View {
         .padding(.top, DesignSystem.Spacing.sm)
     }
     
-    private func signOut() {
-        print("🚪 User initiated sign out from Home tab")
-        do {
-            try authManager.signOut()
-        } catch {
-            print("❌ Sign out error: \(error.localizedDescription)")
-        }
-    }
 }
 
 #Preview {
