@@ -15,6 +15,9 @@ struct HomeItemDetailView: View {
     @State private var isLoadingPhotos = false
     @State private var showingFullScreenPhoto = false
     @State private var showingPhotoUpload = false
+    @State private var showingDeleteConfirmation = false
+    @State private var isDeleting = false
+    @State private var deleteError: String?
     @EnvironmentObject var authManager: AuthenticationManager
     @Environment(\.dismiss) private var dismiss
     
@@ -38,12 +41,24 @@ struct HomeItemDetailView: View {
         .navigationBarTitleDisplayMode(.large)
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
-                Button(action: {
-                    showingPhotoUpload = true
-                }) {
-                    Image(systemName: "camera.fill")
-                        .font(.title2)
-                        .foregroundColor(DesignSystem.Colors.primary)
+                HStack(spacing: DesignSystem.Spacing.sm) {
+                    Button(action: {
+                        showingPhotoUpload = true
+                    }) {
+                        Image(systemName: "photo.badge.plus")
+                            .font(.title2)
+                            .foregroundColor(DesignSystem.Colors.primary)
+                    }
+                    .disabled(isDeleting)
+
+                    Button(action: {
+                        showingDeleteConfirmation = true
+                    }) {
+                        Image(systemName: "trash")
+                            .font(.title2)
+                            .foregroundColor(DesignSystem.Colors.error)
+                    }
+                    .disabled(isDeleting)
                 }
             }
         }
@@ -63,6 +78,27 @@ struct HomeItemDetailView: View {
                 loadPhotos()
             }
             .environmentObject(authManager)
+        }
+        .alert("Delete Item", isPresented: $showingDeleteConfirmation) {
+            Button("Cancel", role: .cancel) { }
+            Button("Delete", role: .destructive) {
+                deleteHomeItem()
+            }
+        } message: {
+            Text("Are you sure you want to delete \"\(homeItem.name)\"? This will permanently delete the item and all its photos. This action cannot be undone.")
+        }
+        .alert("Error", isPresented: Binding<Bool>(
+            get: { deleteError != nil },
+            set: { if !$0 { deleteError = nil } }
+        )) {
+            Button("OK") { }
+        } message: {
+            Text(deleteError ?? "")
+        }
+        .overlay {
+            if isDeleting {
+                deletingOverlay
+            }
         }
     }
     
@@ -364,16 +400,105 @@ struct HomeItemDetailView: View {
         }
     }
     
+    private var deletingOverlay: some View {
+        ZStack {
+            Color.black.opacity(0.4)
+                .ignoresSafeArea()
+
+            VStack(spacing: DesignSystem.Spacing.md) {
+                ProgressView()
+                    .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                    .scaleEffect(1.5)
+
+                Text("Deleting item...")
+                    .font(DesignSystem.Typography.headline)
+                    .foregroundColor(.white)
+            }
+            .padding(DesignSystem.Spacing.xl)
+            .background(
+                RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.md)
+                    .fill(Color.black.opacity(0.8))
+            )
+        }
+    }
+
+    private func deleteHomeItem() {
+        guard let firebaseUser = authManager.user else {
+            deleteError = "Authentication required"
+            return
+        }
+
+        isDeleting = true
+        deleteError = nil
+
+        Task {
+            do {
+                print("🔐 Getting Firebase token for item deletion...")
+                let firebaseToken = try await firebaseUser.getIDToken()
+
+                print("🗑️ DELETE ITEM DEBUG INFO:")
+                print("   📦 Item Name: \(homeItem.name)")
+                print("   📦 Item ID: \(homeItem.id)")
+                print("   🏠 Home ID: \(home.id)")
+                print("   🏠 Home Address: \(home.address ?? "N/A")")
+                print("   👤 User Role: \(home.role)")
+
+                try await APIService.shared.deleteHomeItem(
+                    homeId: home.id,
+                    itemId: homeItem.id,
+                    firebaseToken: firebaseToken
+                )
+
+                print("✅ Successfully deleted home item")
+
+                await MainActor.run {
+                    isDeleting = false
+
+                    // Refresh homes list in the auth manager
+                    Task {
+                        await authManager.refreshHomes()
+                    }
+
+                    // Dismiss the detail view to go back to the list
+                    dismiss()
+                }
+
+            } catch {
+                await MainActor.run {
+                    print("❌ Error deleting home item: \(error)")
+                    isDeleting = false
+
+                    if let apiError = error as? APIError {
+                        switch apiError {
+                        case .unauthorized:
+                            deleteError = "Authentication failed. Please try logging in again."
+                        case .forbidden:
+                            deleteError = "You don't have permission to delete this item."
+                        case .networkError(let message):
+                            deleteError = message
+                        case .serverError(let code):
+                            deleteError = "Server error (\(code)). Please try again later."
+                        default:
+                            deleteError = apiError.localizedDescription
+                        }
+                    } else {
+                        deleteError = "Failed to delete item: \(error.localizedDescription)"
+                    }
+                }
+            }
+        }
+    }
+
     private func formatDate(_ dateString: String) -> String {
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ss"
-        
+
         if let date = formatter.date(from: dateString) {
             formatter.dateStyle = .medium
             formatter.timeStyle = .none
             return formatter.string(from: date)
         }
-        
+
         return dateString
     }
 }

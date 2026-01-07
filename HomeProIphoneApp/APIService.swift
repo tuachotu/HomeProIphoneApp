@@ -642,42 +642,42 @@ class APIService: ObservableObject {
         guard let url = URL(string: "\(baseURL)/homes") else {
             throw APIError.invalidURL
         }
-        
+
         let requestBody = CreateHomeRequest(address: address, role: role)
-        
+
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("application/json, text/plain, */*", forHTTPHeaderField: "Accept")
         request.setValue("Bearer \(firebaseToken)", forHTTPHeaderField: "Authorization")
         request.setValue("keep-alive", forHTTPHeaderField: "Connection")
-        
+
         do {
             let jsonData = try JSONEncoder().encode(requestBody)
             request.httpBody = jsonData
-            
+
             print("🏠 Making create home request to: \(url.absoluteString)")
             print("📄 Request body: \(String(data: jsonData, encoding: .utf8) ?? "nil")")
-            
+
             let (data, response) = try await urlSession.data(for: request)
-            
+
             guard let httpResponse = response as? HTTPURLResponse else {
                 print("❌ Invalid create home response type")
                 throw APIError.networkError("Invalid response")
             }
-            
+
             print("📱 Create home response status: \(httpResponse.statusCode)")
             if let responseString = String(data: data, encoding: .utf8) {
                 print("📄 Create home response body: \(responseString)")
             }
-            
+
             switch httpResponse.statusCode {
             case 201:
                 guard !data.isEmpty else {
                     print("❌ No data received from create home")
                     throw APIError.noData
                 }
-                
+
                 do {
                     let createResponse = try JSONDecoder().decode(CreateHomeResponse.self, from: data)
                     print("✅ Successfully created home: \(createResponse)")
@@ -687,7 +687,7 @@ class APIService: ObservableObject {
                     print("📄 Raw create home data: \(String(data: data, encoding: .utf8) ?? "nil")")
                     throw APIError.decodingError
                 }
-                
+
             case 400:
                 throw APIError.badRequest
             case 401:
@@ -697,7 +697,71 @@ class APIService: ObservableObject {
             default:
                 throw APIError.serverError(httpResponse.statusCode)
             }
-            
+
+        } catch {
+            if error is APIError {
+                throw error
+            } else {
+                throw APIError.networkError(error.localizedDescription)
+            }
+        }
+    }
+
+    func deleteHomeItem(homeId: String, itemId: String, firebaseToken: String) async throws {
+        guard let url = URL(string: "\(baseURL)/homes/\(homeId)/items/\(itemId)") else {
+            throw APIError.invalidURL
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "DELETE"
+        request.setValue("application/json, text/plain, */*", forHTTPHeaderField: "Accept")
+        request.setValue("Bearer \(firebaseToken)", forHTTPHeaderField: "Authorization")
+        request.setValue("keep-alive", forHTTPHeaderField: "Connection")
+
+        do {
+            print("🗑️ DELETE HOME ITEM DEBUG:")
+            print("   🔗 URL: \(url.absoluteString)")
+            print("   🏠 Home ID: \(homeId)")
+            print("   📦 Item ID: \(itemId)")
+            print("   🔑 Token (first 20 chars): \(firebaseToken.prefix(20))...")
+            print("   📋 All headers: \(request.allHTTPHeaderFields ?? [:])")
+
+            let (data, response) = try await urlSession.data(for: request)
+
+            guard let httpResponse = response as? HTTPURLResponse else {
+                print("❌ Invalid delete home item response type")
+                throw APIError.networkError("Invalid response")
+            }
+
+            print("📱 Delete home item response status: \(httpResponse.statusCode)")
+            if !data.isEmpty, let responseString = String(data: data, encoding: .utf8) {
+                print("📄 Delete home item response body: \(responseString)")
+            }
+
+            switch httpResponse.statusCode {
+            case 204:
+                print("✅ Successfully deleted home item")
+                return
+
+            case 401:
+                throw APIError.unauthorized
+            case 403:
+                print("❌ Forbidden (403) - User doesn't have access to this home or item")
+                if let errorBody = String(data: data, encoding: .utf8), !errorBody.isEmpty {
+                    print("   Server error message: \(errorBody)")
+                }
+                throw APIError.forbidden
+            case 404:
+                print("❌ Not Found (404) - Home item not found")
+                throw APIError.networkError("Home item not found")
+            default:
+                print("❌ Server error (\(httpResponse.statusCode))")
+                if let errorBody = String(data: data, encoding: .utf8), !errorBody.isEmpty {
+                    print("   Server error message: \(errorBody)")
+                }
+                throw APIError.serverError(httpResponse.statusCode)
+            }
+
         } catch {
             if error is APIError {
                 throw error

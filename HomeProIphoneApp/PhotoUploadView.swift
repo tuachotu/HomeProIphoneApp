@@ -7,11 +7,12 @@
 
 import SwiftUI
 import PhotosUI
+import AVFoundation
 
 struct PhotoUploadView: View {
     let homeItem: HomeItem
     let onPhotosUploaded: () -> Void
-    
+
     @State private var selectedPhotos: [PhotosPickerItem] = []
     @State private var selectedImages: [UIImage] = []
     @State private var isUploading = false
@@ -22,10 +23,13 @@ struct PhotoUploadView: View {
     @State private var errorMessage: String?
     @State private var showingSuccess = false
     @State private var uploadErrors: [String] = []
-    
+    @State private var showingCamera = false
+    @State private var showingCameraPermission = false
+    @State private var showingPhotoSourcePicker = false
+
     @EnvironmentObject var authManager: AuthenticationManager
     @Environment(\.dismiss) private var dismiss
-    
+
     private let maxPhotos = 10
     
     var body: some View {
@@ -91,6 +95,27 @@ struct PhotoUploadView: View {
         .onChange(of: selectedPhotos) { _ in
             loadSelectedImages()
         }
+        .fullScreenCover(isPresented: $showingCamera) {
+            CameraView(isPresented: $showingCamera, onImageCaptured: { capturedImage in
+                addCapturedImage(capturedImage)
+            }, onError: { error in
+                errorMessage = error
+            })
+            .ignoresSafeArea()
+        }
+        .sheet(isPresented: $showingCameraPermission) {
+            CameraPermissionView(isPresented: $showingCameraPermission)
+        }
+        .confirmationDialog("Add Photos", isPresented: $showingPhotoSourcePicker) {
+            Button("Take Photo") {
+                openCamera()
+            }
+            Button("Choose from Library") {
+                // This will be handled by PhotosPicker
+                showingPhotoSourcePicker = false
+            }
+            Button("Cancel", role: .cancel) {}
+        }
     }
     
     private var headerSection: some View {
@@ -124,28 +149,24 @@ struct PhotoUploadView: View {
                 Image(systemName: "photo.on.rectangle.angled")
                     .font(.system(size: 64))
                     .foregroundColor(DesignSystem.Colors.textTertiary)
-                
+
                 VStack(spacing: DesignSystem.Spacing.sm) {
-                    Text("Select Photos")
+                    Text("Add Photos")
                         .font(DesignSystem.Typography.title2)
                         .foregroundColor(DesignSystem.Colors.textPrimary)
-                    
-                    Text("Choose up to \(maxPhotos) photos from your library")
+
+                    Text("Take new photos or choose up to \(maxPhotos) from your library")
                         .font(DesignSystem.Typography.body)
                         .foregroundColor(DesignSystem.Colors.textSecondary)
                         .multilineTextAlignment(.center)
                 }
             }
-            
-            // Photo picker button
-            PhotosPicker(
-                selection: $selectedPhotos,
-                maxSelectionCount: maxPhotos,
-                matching: .images
-            ) {
+
+            // Camera button
+            Button(action: openCamera) {
                 HStack(spacing: DesignSystem.Spacing.sm) {
-                    Image(systemName: "photo.badge.plus")
-                    Text("Choose Photos")
+                    Image(systemName: "camera.fill")
+                    Text("Take Photo")
                 }
                 .font(DesignSystem.Typography.callout)
                 .fontWeight(.semibold)
@@ -155,6 +176,44 @@ struct PhotoUploadView: View {
                 .background(
                     RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.md)
                         .fill(DesignSystem.Colors.primary)
+                )
+            }
+            .disabled(isUploading)
+
+            // Divider with "or" text
+            HStack(spacing: DesignSystem.Spacing.md) {
+                Rectangle()
+                    .fill(DesignSystem.Colors.border)
+                    .frame(height: 1)
+
+                Text("or")
+                    .font(DesignSystem.Typography.caption)
+                    .foregroundColor(DesignSystem.Colors.textSecondary)
+
+                Rectangle()
+                    .fill(DesignSystem.Colors.border)
+                    .frame(height: 1)
+            }
+
+            // Photo library picker button
+            PhotosPicker(
+                selection: $selectedPhotos,
+                maxSelectionCount: maxPhotos,
+                matching: .images
+            ) {
+                HStack(spacing: DesignSystem.Spacing.sm) {
+                    Image(systemName: "photo.badge.plus")
+                    Text("Choose from Library")
+                }
+                .font(DesignSystem.Typography.callout)
+                .fontWeight(.semibold)
+                .foregroundColor(DesignSystem.Colors.primary)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, DesignSystem.Spacing.md)
+                .background(
+                    RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.md)
+                        .fill(Color.clear)
+                        .stroke(DesignSystem.Colors.primary, lineWidth: 2)
                 )
             }
             .disabled(isUploading)
@@ -169,16 +228,27 @@ struct PhotoUploadView: View {
                 Text("Selected Photos (\(selectedImages.count))")
                     .font(DesignSystem.Typography.headline)
                     .foregroundColor(DesignSystem.Colors.textPrimary)
-                
+
                 Spacer()
-                
+
+                if !isUploading && selectedImages.count < maxPhotos {
+                    Button(action: openCamera) {
+                        HStack(spacing: DesignSystem.Spacing.xs) {
+                            Image(systemName: "camera.fill")
+                            Text("Add More")
+                        }
+                    }
+                    .font(DesignSystem.Typography.callout)
+                    .foregroundColor(DesignSystem.Colors.primary)
+                }
+
                 if !isUploading {
-                    Button("Change") {
+                    Button("Clear") {
                         selectedPhotos.removeAll()
                         selectedImages.removeAll()
                     }
                     .font(DesignSystem.Typography.callout)
-                    .foregroundColor(DesignSystem.Colors.primary)
+                    .foregroundColor(DesignSystem.Colors.error)
                 }
             }
             
@@ -533,6 +603,66 @@ struct PhotoUploadView: View {
     private func estimateImageSize(_ image: UIImage) -> Int {
         // Rough estimate: width * height * 4 bytes per pixel (RGBA)
         return Int(image.size.width * image.size.height * 4)
+    }
+
+    // MARK: - Camera Functions
+
+    private func openCamera() {
+        print("📸 openCamera() called")
+
+        // First check if camera is available
+        guard UIImagePickerController.isSourceTypeAvailable(.camera) else {
+            print("❌ Camera source type not available (probably simulator)")
+            errorMessage = "Camera is not available on this device. Camera only works on physical devices, not the simulator."
+            return
+        }
+
+        let cameraStatus = AVCaptureDevice.authorizationStatus(for: .video)
+        print("📸 Camera authorization status: \(cameraStatus.rawValue)")
+
+        switch cameraStatus {
+        case .authorized:
+            print("✅ Camera already authorized, opening camera")
+            showingCamera = true
+
+        case .notDetermined:
+            print("📸 Camera permission not determined, requesting access")
+            AVCaptureDevice.requestAccess(for: .video) { granted in
+                DispatchQueue.main.async {
+                    print("📸 Camera permission request result: \(granted)")
+                    if granted {
+                        self.showingCamera = true
+                    } else {
+                        self.showingCameraPermission = true
+                    }
+                }
+            }
+
+        case .denied:
+            print("⚠️ Camera permission denied, showing permission view")
+            showingCameraPermission = true
+
+        case .restricted:
+            print("⚠️ Camera access restricted")
+            showingCameraPermission = true
+
+        @unknown default:
+            print("❌ Unknown camera permission status")
+            showingCameraPermission = true
+        }
+    }
+
+    private func addCapturedImage(_ image: UIImage) {
+        print("📸 addCapturedImage() called with image size: \(image.size)")
+
+        guard selectedImages.count < maxPhotos else {
+            print("⚠️ Maximum photos (\(maxPhotos)) already selected")
+            errorMessage = "Maximum of \(maxPhotos) photos allowed"
+            return
+        }
+
+        selectedImages.append(image)
+        print("✅ Added captured photo. Total photos: \(selectedImages.count)")
     }
 }
 
