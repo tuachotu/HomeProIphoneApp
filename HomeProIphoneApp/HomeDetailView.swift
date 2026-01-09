@@ -16,7 +16,12 @@ struct HomeDetailView: View {
     @State private var showingAddItem = false
     @State private var selectedItem: HomeItem?
     @State private var showingItemPhotos = false
-    
+    @State private var showingDeleteConfirmation = false
+    @State private var isDeleting = false
+    @State private var deleteError: String?
+    @State private var showingAllItems = false
+    @Environment(\.dismiss) private var dismiss
+
     var body: some View {
         ScrollView {
             VStack(spacing: DesignSystem.Spacing.xl) {
@@ -34,6 +39,18 @@ struct HomeDetailView: View {
         .background(DesignSystem.Colors.background)
         .navigationTitle("Home Details")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                Button(action: {
+                    showingDeleteConfirmation = true
+                }) {
+                    Image(systemName: "trash")
+                        .font(.title3)
+                        .foregroundColor(DesignSystem.Colors.error)
+                }
+                .disabled(isDeleting)
+            }
+        }
         .onAppear {
             loadHomeItems()
         }
@@ -49,6 +66,34 @@ struct HomeDetailView: View {
         .sheet(isPresented: $showingItemPhotos) {
             if let selectedItem = selectedItem {
                 ItemPhotosView(homeItem: selectedItem)
+            }
+        }
+        .sheet(isPresented: $showingAllItems, onDismiss: {
+            // Refresh items when returning from full items view
+            loadHomeItems()
+        }) {
+            HomeItemsListView(home: home)
+                .environmentObject(authManager)
+        }
+        .alert("Delete Home", isPresented: $showingDeleteConfirmation) {
+            Button("Cancel", role: .cancel) { }
+            Button("Delete", role: .destructive) {
+                deleteHome()
+            }
+        } message: {
+            Text("Are you sure you want to delete this home and all its items? This will permanently delete \(home.stats.totalItems) item\(home.stats.totalItems == 1 ? "" : "s") and \(home.stats.totalPhotos) photo\(home.stats.totalPhotos == 1 ? "" : "s"). This action cannot be undone.")
+        }
+        .alert("Error", isPresented: Binding<Bool>(
+            get: { deleteError != nil },
+            set: { if !$0 { deleteError = nil } }
+        )) {
+            Button("OK") { }
+        } message: {
+            Text(deleteError ?? "")
+        }
+        .overlay {
+            if isDeleting {
+                deletingOverlay
             }
         }
         .sequentialTapDeveloperGesture()
@@ -109,21 +154,31 @@ struct HomeDetailView: View {
         VStack(alignment: .leading, spacing: DesignSystem.Spacing.lg) {
             // Section Header
             HStack {
-                Text("Home Items")
-                    .font(DesignSystem.Typography.headline)
-                    .foregroundColor(DesignSystem.Colors.textPrimary)
-                
-                Spacer()
-                
-                Button {
-                    showingAddItem = true
-                } label: {
-                    HStack(spacing: DesignSystem.Spacing.xs) {
-                        Image(systemName: "plus.circle.fill")
-                        Text("Add Item")
+                VStack(alignment: .leading, spacing: DesignSystem.Spacing.xs) {
+                    Text("Recent Items")
+                        .font(DesignSystem.Typography.headline)
+                        .foregroundColor(DesignSystem.Colors.textPrimary)
+
+                    if !homeItems.isEmpty && homeItems.count > 3 {
+                        Text("Showing \(min(3, homeItems.count)) of \(homeItems.count)")
+                            .font(DesignSystem.Typography.caption)
+                            .foregroundColor(DesignSystem.Colors.textSecondary)
                     }
-                    .font(DesignSystem.Typography.callout)
-                    .foregroundColor(DesignSystem.Colors.primary)
+                }
+
+                Spacer()
+
+                if !homeItems.isEmpty && homeItems.count > 3 {
+                    Button {
+                        showingAllItems = true
+                    } label: {
+                        HStack(spacing: DesignSystem.Spacing.xs) {
+                            Text("View All")
+                            Image(systemName: "arrow.right")
+                        }
+                        .font(DesignSystem.Typography.callout)
+                        .foregroundColor(DesignSystem.Colors.primary)
+                    }
                 }
             }
             .padding(.horizontal, DesignSystem.Spacing.lg)
@@ -153,16 +208,16 @@ struct HomeDetailView: View {
     }
     
     private var emptyStateSection: some View {
-        VStack(spacing: DesignSystem.Spacing.lg) {
+        VStack(spacing: DesignSystem.Spacing.md) {
             VStack(spacing: DesignSystem.Spacing.md) {
                 Image(systemName: "cube.box")
                     .font(.system(size: 48))
                     .foregroundColor(DesignSystem.Colors.textTertiary)
-                
+
                 Text("No Items Yet")
                     .font(DesignSystem.Typography.headline)
                     .foregroundColor(DesignSystem.Colors.textPrimary)
-                
+
                 Text("Start organizing your home by adding your first item. Track appliances, utilities, rooms, and more.")
                     .font(DesignSystem.Typography.callout)
                     .foregroundColor(DesignSystem.Colors.textSecondary)
@@ -171,7 +226,7 @@ struct HomeDetailView: View {
             }
             .padding(DesignSystem.Spacing.xl)
             .cardStyle()
-            
+
             Button {
                 showingAddItem = true
             } label: {
@@ -182,17 +237,33 @@ struct HomeDetailView: View {
                 .frame(maxWidth: .infinity)
             }
             .primaryButtonStyle()
+            .padding(.horizontal, DesignSystem.Spacing.lg)
         }
     }
     
     private var itemsListSection: some View {
-        LazyVStack(spacing: DesignSystem.Spacing.md) {
-            ForEach(homeItems) { item in
+        VStack(spacing: DesignSystem.Spacing.md) {
+            // Show only first 3 items as preview
+            ForEach(Array(homeItems.prefix(3))) { item in
                 HomeItemCardView(homeItem: item) {
                     selectedItem = item
                     showingItemPhotos = true
                 }
             }
+
+            // Add Item button
+            Button {
+                showingAddItem = true
+            } label: {
+                HStack {
+                    Image(systemName: "plus.circle.fill")
+                    Text("Add New Item")
+                }
+                .frame(maxWidth: .infinity)
+            }
+            .secondaryButtonStyle()
+            .padding(.horizontal, DesignSystem.Spacing.lg)
+            .padding(.top, DesignSystem.Spacing.sm)
         }
     }
     
@@ -230,7 +301,7 @@ struct HomeDetailView: View {
     @MainActor
     private func refreshHomeItems() async {
         guard let firebaseUser = authManager.user else { return }
-        
+
         do {
             let firebaseToken = try await firebaseUser.getIDToken()
             let items = try await APIService.shared.getHomeItems(
@@ -241,6 +312,93 @@ struct HomeDetailView: View {
             print("🔄 Refreshed \(items.count) home items")
         } catch {
             print("❌ Failed to refresh home items: \(error)")
+        }
+    }
+
+    private var deletingOverlay: some View {
+        ZStack {
+            Color.black.opacity(0.4)
+                .ignoresSafeArea()
+
+            VStack(spacing: DesignSystem.Spacing.md) {
+                ProgressView()
+                    .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                    .scaleEffect(1.5)
+
+                Text("Deleting home...")
+                    .font(DesignSystem.Typography.headline)
+                    .foregroundColor(.white)
+            }
+            .padding(DesignSystem.Spacing.xl)
+            .background(
+                RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.md)
+                    .fill(Color.black.opacity(0.8))
+            )
+        }
+    }
+
+    private func deleteHome() {
+        guard let firebaseUser = authManager.user else {
+            deleteError = "Authentication required"
+            return
+        }
+
+        isDeleting = true
+        deleteError = nil
+
+        Task {
+            do {
+                print("🔐 Getting Firebase token for home deletion...")
+                let firebaseToken = try await firebaseUser.getIDToken()
+
+                print("🗑️ DELETE HOME DEBUG INFO:")
+                print("   🏠 Home ID: \(home.id)")
+                print("   🏠 Home Address: \(home.address ?? "N/A")")
+                print("   📦 Total Items: \(home.stats.totalItems)")
+                print("   📷 Total Photos: \(home.stats.totalPhotos)")
+
+                try await APIService.shared.deleteHome(
+                    homeId: home.id,
+                    firebaseToken: firebaseToken
+                )
+
+                print("✅ Successfully deleted home")
+
+                await MainActor.run {
+                    isDeleting = false
+
+                    // Refresh homes list in the auth manager
+                    Task {
+                        await authManager.refreshHomes()
+                    }
+
+                    // Dismiss the detail view to go back to the list
+                    dismiss()
+                }
+
+            } catch {
+                await MainActor.run {
+                    print("❌ Error deleting home: \(error)")
+                    isDeleting = false
+
+                    if let apiError = error as? APIError {
+                        switch apiError {
+                        case .unauthorized:
+                            deleteError = "Authentication failed. Please try logging in again."
+                        case .forbidden:
+                            deleteError = "You don't have permission to delete this home."
+                        case .networkError(let message):
+                            deleteError = message
+                        case .serverError(let code):
+                            deleteError = "Server error (\(code)). Please try again later."
+                        default:
+                            deleteError = apiError.localizedDescription
+                        }
+                    } else {
+                        deleteError = "Failed to delete home: \(error.localizedDescription)"
+                    }
+                }
+            }
         }
     }
 }

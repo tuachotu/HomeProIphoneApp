@@ -68,7 +68,11 @@ struct HomeItemDetailView: View {
         .fullScreenCover(isPresented: $showingFullScreenPhoto) {
             FullScreenPhotoView(
                 photos: photos,
-                currentIndex: $currentPhotoIndex
+                currentIndex: $currentPhotoIndex,
+                onPhotoDeleted: {
+                    // Reload photos after deletion
+                    loadPhotos()
+                }
             )
             .environmentObject(authManager)
         }
@@ -533,10 +537,19 @@ struct DetailRow: View {
 struct FullScreenPhotoView: View {
     let photos: [Photo]
     @Binding var currentIndex: Int
+    var onPhotoDeleted: (() -> Void)?
+
     @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject var authManager: AuthenticationManager
+
     @State private var dragOffset: CGSize = .zero
     @State private var scale: CGFloat = 1.0
-    
+    @State private var showingDeleteConfirmation = false
+    @State private var isDeleting = false
+    @State private var deleteError: String?
+    @State private var isSettingPrimary = false
+    @State private var primaryError: String?
+
     var body: some View {
         ZStack {
             Color.black
@@ -564,7 +577,7 @@ struct FullScreenPhotoView: View {
                 }
                 .onEnded { value in
                     let threshold: CGFloat = 100
-                    
+
                     if value.translation.height > threshold {
                         dismiss()
                     } else if abs(value.translation.width) > threshold && photos.count > 1 {
@@ -578,12 +591,45 @@ struct FullScreenPhotoView: View {
                             }
                         }
                     }
-                    
+
                     withAnimation(.spring()) {
                         dragOffset = .zero
                     }
                 }
         )
+        .alert("Delete Photo", isPresented: $showingDeleteConfirmation) {
+            Button("Cancel", role: .cancel) { }
+            Button("Delete", role: .destructive) {
+                deletePhoto()
+            }
+        } message: {
+            Text("Are you sure you want to permanently delete this photo? This action cannot be undone.")
+        }
+        .alert("Error", isPresented: Binding<Bool>(
+            get: { deleteError != nil },
+            set: { if !$0 { deleteError = nil } }
+        )) {
+            Button("OK") { }
+        } message: {
+            Text(deleteError ?? "")
+        }
+        .alert("Primary Photo Error", isPresented: Binding<Bool>(
+            get: { primaryError != nil },
+            set: { if !$0 { primaryError = nil } }
+        )) {
+            Button("OK") { }
+        } message: {
+            Text(primaryError ?? "")
+        }
+        .overlay {
+            if isDeleting {
+                deletingPhotoOverlay
+            }
+        }
+    }
+
+    private var currentPhoto: Photo {
+        photos[currentIndex]
     }
     
     private var topNavigationBar: some View {
@@ -594,13 +640,38 @@ struct FullScreenPhotoView: View {
             .font(DesignSystem.Typography.body)
             .foregroundColor(.white)
             .padding()
-            
+            .disabled(isDeleting)
+
             Spacer()
-            
+
             Text("\(currentIndex + 1) of \(photos.count)")
                 .font(DesignSystem.Typography.body)
                 .foregroundColor(.white)
                 .padding()
+
+            Spacer()
+
+            // Primary photo button
+            Button(action: {
+                setPhotoPrimary()
+            }) {
+                Image(systemName: currentPhoto.isPrimary ? "star.fill" : "star")
+                    .font(.title2)
+                    .foregroundColor(isSettingPrimary ? .gray : .yellow)
+            }
+            .padding()
+            .disabled(isDeleting || isSettingPrimary)
+
+            // Delete button
+            Button(action: {
+                showingDeleteConfirmation = true
+            }) {
+                Image(systemName: "trash")
+                    .font(.title2)
+                    .foregroundColor(isDeleting ? .gray : .red)
+            }
+            .padding()
+            .disabled(isDeleting || isSettingPrimary)
         }
         .background(
             LinearGradient(
@@ -612,29 +683,50 @@ struct FullScreenPhotoView: View {
     }
     
     private var photoDisplay: some View {
-        CachedAsyncImage(url: photos[currentIndex].url) { image in
-            image
-                .resizable()
-                .aspectRatio(contentMode: .fit)
-                .scaleEffect(scale)
-                .offset(dragOffset)
-        } placeholder: {
-            ProgressView()
-                .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                .scaleEffect(2)
-        }
-        .clipped()
-        .gesture(
-            MagnificationGesture()
-                .onChanged { value in
-                    scale = max(1.0, min(3.0, value))
-                }
-                .onEnded { _ in
-                    withAnimation(.spring()) {
-                        scale = 1.0
+        ZStack(alignment: .topLeading) {
+            CachedAsyncImage(url: photos[currentIndex].url) { image in
+                image
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .scaleEffect(scale)
+                    .offset(dragOffset)
+            } placeholder: {
+                ProgressView()
+                    .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                    .scaleEffect(2)
+            }
+            .clipped()
+            .gesture(
+                MagnificationGesture()
+                    .onChanged { value in
+                        scale = max(1.0, min(3.0, value))
                     }
+                    .onEnded { _ in
+                        withAnimation(.spring()) {
+                            scale = 1.0
+                        }
+                    }
+            )
+
+            // Primary photo badge
+            if currentPhoto.isPrimary {
+                HStack(spacing: 4) {
+                    Image(systemName: "star.fill")
+                        .font(.caption)
+                    Text("Primary")
+                        .font(DesignSystem.Typography.caption2)
+                        .fontWeight(.semibold)
                 }
-        )
+                .foregroundColor(.yellow)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(Color.black.opacity(0.7))
+                )
+                .padding(12)
+            }
+        }
     }
     
     private var bottomNavigationBar: some View {
@@ -700,6 +792,168 @@ struct FullScreenPhotoView: View {
                 endPoint: .bottom
             )
         )
+    }
+
+    private var deletingPhotoOverlay: some View {
+        ZStack {
+            Color.black.opacity(0.6)
+                .ignoresSafeArea()
+
+            VStack(spacing: DesignSystem.Spacing.md) {
+                ProgressView()
+                    .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                    .scaleEffect(1.5)
+
+                Text("Deleting photo...")
+                    .font(DesignSystem.Typography.headline)
+                    .foregroundColor(.white)
+            }
+            .padding(DesignSystem.Spacing.xl)
+            .background(
+                RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.md)
+                    .fill(Color.black.opacity(0.8))
+            )
+        }
+    }
+
+    private func deletePhoto() {
+        guard let firebaseUser = authManager.user else {
+            deleteError = "Authentication required"
+            return
+        }
+
+        guard currentIndex < photos.count else {
+            deleteError = "Invalid photo"
+            return
+        }
+
+        let photoToDelete = photos[currentIndex]
+        isDeleting = true
+        deleteError = nil
+
+        Task {
+            do {
+                print("🔐 Getting Firebase token for photo deletion...")
+                let firebaseToken = try await firebaseUser.getIDToken()
+
+                print("🗑️ DELETE PHOTO DEBUG INFO:")
+                print("   📷 Photo ID: \(photoToDelete.id)")
+                print("   📷 File Name: \(photoToDelete.fileName)")
+                print("   📷 Current Index: \(currentIndex)")
+                print("   📷 Total Photos: \(photos.count)")
+
+                try await APIService.shared.deletePhoto(
+                    photoId: photoToDelete.id,
+                    firebaseToken: firebaseToken
+                )
+
+                print("✅ Successfully deleted photo")
+
+                await MainActor.run {
+                    isDeleting = false
+
+                    // Call the callback to refresh photos
+                    onPhotoDeleted?()
+
+                    // If this was the last photo, dismiss the viewer
+                    if photos.count <= 1 {
+                        dismiss()
+                    }
+                }
+
+            } catch {
+                await MainActor.run {
+                    print("❌ Error deleting photo: \(error)")
+                    isDeleting = false
+
+                    if let apiError = error as? APIError {
+                        switch apiError {
+                        case .unauthorized:
+                            deleteError = "Authentication failed. Please try logging in again."
+                        case .forbidden:
+                            deleteError = "You don't have permission to delete this photo."
+                        case .networkError(let message):
+                            deleteError = message
+                        case .serverError(let code):
+                            deleteError = "Server error (\(code)). Please try again later."
+                        default:
+                            deleteError = apiError.localizedDescription
+                        }
+                    } else {
+                        deleteError = "Failed to delete photo: \(error.localizedDescription)"
+                    }
+                }
+            }
+        }
+    }
+
+    private func setPhotoPrimary() {
+        guard let firebaseUser = authManager.user else {
+            primaryError = "Authentication required"
+            return
+        }
+
+        guard currentIndex < photos.count else {
+            primaryError = "Invalid photo"
+            return
+        }
+
+        let photo = currentPhoto
+        let newPrimaryStatus = !photo.isPrimary
+
+        isSettingPrimary = true
+        primaryError = nil
+
+        Task {
+            do {
+                print("🔐 Getting Firebase token for set photo primary...")
+                let firebaseToken = try await firebaseUser.getIDToken()
+
+                print("⭐ SET PHOTO PRIMARY DEBUG INFO:")
+                print("   📷 Photo ID: \(photo.id)")
+                print("   📷 File Name: \(photo.fileName)")
+                print("   📷 Current Primary: \(photo.isPrimary)")
+                print("   📷 New Primary: \(newPrimaryStatus)")
+
+                try await APIService.shared.setPhotoPrimary(
+                    photoId: photo.id,
+                    isPrimary: newPrimaryStatus,
+                    firebaseToken: firebaseToken
+                )
+
+                print("✅ Successfully updated photo primary status")
+
+                await MainActor.run {
+                    isSettingPrimary = false
+
+                    // Call the callback to refresh photos
+                    onPhotoDeleted?()
+                }
+
+            } catch {
+                await MainActor.run {
+                    print("❌ Error setting photo primary: \(error)")
+                    isSettingPrimary = false
+
+                    if let apiError = error as? APIError {
+                        switch apiError {
+                        case .unauthorized:
+                            primaryError = "Authentication failed. Please try logging in again."
+                        case .forbidden:
+                            primaryError = "You don't have permission to update this photo."
+                        case .networkError(let message):
+                            primaryError = message
+                        case .serverError(let code):
+                            primaryError = "Server error (\(code)). Please try again later."
+                        default:
+                            primaryError = apiError.localizedDescription
+                        }
+                    } else {
+                        primaryError = "Failed to update photo: \(error.localizedDescription)"
+                    }
+                }
+            }
+        }
     }
 }
 

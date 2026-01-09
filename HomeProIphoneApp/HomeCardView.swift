@@ -15,7 +15,8 @@ struct HomeCardView: View {
     @EnvironmentObject var authManager: AuthenticationManager
     
     var body: some View {
-        NavigationLink(destination: HomeDetailView(home: home)) {
+        NavigationLink(destination: HomeDetailView(home: home)
+            .environmentObject(authManager)) {
             VStack(alignment: .leading, spacing: DesignSystem.Spacing.md) {
                 // Home Photo
                 homePhotoSection
