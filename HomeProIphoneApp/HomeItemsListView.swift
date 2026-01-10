@@ -23,6 +23,18 @@ struct HomeItemsListView: View {
     var body: some View {
         NavigationView {
             VStack(spacing: 0) {
+                // Debug info at the top
+                if let _ = errorMessage {
+                    // Error will be shown in emptyStateView
+                } else {
+                    // Show debug info
+                    Text("Home ID: \(home.id)")
+                        .font(.system(size: 10))
+                        .foregroundColor(.gray)
+                        .padding(.horizontal)
+                        .padding(.top, 4)
+                }
+
                 // Filter section
                 filterSection
                 
@@ -72,7 +84,10 @@ struct HomeItemsListView: View {
                 }
                 .environmentObject(authManager)
             }
-            .sheet(isPresented: $showingItemDetail) {
+            .sheet(isPresented: $showingItemDetail, onDismiss: {
+                // Refresh items list when detail view is dismissed (e.g., after deletion)
+                loadHomeItems()
+            }) {
                 if let selectedItem = selectedItem {
                     NavigationView {
                         HomeItemDetailView(homeItem: selectedItem, home: home)
@@ -222,12 +237,18 @@ struct HomeItemsListView: View {
     }
     
     private func loadHomeItems() {
-        print("🏠 Starting to load home items for home: \(home.id)")
-        guard !isLoadingItems else { 
+        print("🏠 ========================================")
+        print("🏠 LOAD HOME ITEMS DEBUG")
+        print("🏠 Home ID: \(home.id)")
+        print("🏠 Home Address: \(home.address ?? "N/A")")
+        print("🏠 User Role: \(home.role)")
+        print("🏠 ========================================")
+
+        guard !isLoadingItems else {
             print("🏠 Already loading home items, skipping...")
-            return 
+            return
         }
-        
+
         Task {
             await MainActor.run {
                 isLoadingItems = true
@@ -249,10 +270,15 @@ struct HomeItemsListView: View {
                     )
                     
                     print("🏠 Successfully loaded \(items.count) home items")
-                    
-                    // Log item details
+
+                    // Log item details with IDs
                     for (index, item) in items.enumerated() {
-                        print("📋 Item \(index + 1): \(item.name) (\(item.type.displayName)) - Emergency: \(item.isEmergency) - Photos: \(item.photoCount)")
+                        print("📋 Item \(index + 1):")
+                        print("   Name: \(item.name)")
+                        print("   ID: \(item.id)")
+                        print("   Type: \(item.type.displayName)")
+                        print("   Emergency: \(item.isEmergency)")
+                        print("   Photos: \(item.photoCount)")
                     }
                     
                     await MainActor.run {

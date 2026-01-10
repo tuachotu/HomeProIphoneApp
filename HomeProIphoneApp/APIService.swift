@@ -642,42 +642,42 @@ class APIService: ObservableObject {
         guard let url = URL(string: "\(baseURL)/homes") else {
             throw APIError.invalidURL
         }
-        
+
         let requestBody = CreateHomeRequest(address: address, role: role)
-        
+
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("application/json, text/plain, */*", forHTTPHeaderField: "Accept")
         request.setValue("Bearer \(firebaseToken)", forHTTPHeaderField: "Authorization")
         request.setValue("keep-alive", forHTTPHeaderField: "Connection")
-        
+
         do {
             let jsonData = try JSONEncoder().encode(requestBody)
             request.httpBody = jsonData
-            
+
             print("🏠 Making create home request to: \(url.absoluteString)")
             print("📄 Request body: \(String(data: jsonData, encoding: .utf8) ?? "nil")")
-            
+
             let (data, response) = try await urlSession.data(for: request)
-            
+
             guard let httpResponse = response as? HTTPURLResponse else {
                 print("❌ Invalid create home response type")
                 throw APIError.networkError("Invalid response")
             }
-            
+
             print("📱 Create home response status: \(httpResponse.statusCode)")
             if let responseString = String(data: data, encoding: .utf8) {
                 print("📄 Create home response body: \(responseString)")
             }
-            
+
             switch httpResponse.statusCode {
             case 201:
                 guard !data.isEmpty else {
                     print("❌ No data received from create home")
                     throw APIError.noData
                 }
-                
+
                 do {
                     let createResponse = try JSONDecoder().decode(CreateHomeResponse.self, from: data)
                     print("✅ Successfully created home: \(createResponse)")
@@ -687,7 +687,7 @@ class APIService: ObservableObject {
                     print("📄 Raw create home data: \(String(data: data, encoding: .utf8) ?? "nil")")
                     throw APIError.decodingError
                 }
-                
+
             case 400:
                 throw APIError.badRequest
             case 401:
@@ -697,7 +697,280 @@ class APIService: ObservableObject {
             default:
                 throw APIError.serverError(httpResponse.statusCode)
             }
-            
+
+        } catch {
+            if error is APIError {
+                throw error
+            } else {
+                throw APIError.networkError(error.localizedDescription)
+            }
+        }
+    }
+
+    func deleteHomeItem(homeId: String, itemId: String, firebaseToken: String) async throws {
+        guard let url = URL(string: "\(baseURL)/homes/\(homeId)/items/\(itemId)") else {
+            throw APIError.invalidURL
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "DELETE"
+        request.setValue("application/json, text/plain, */*", forHTTPHeaderField: "Accept")
+        request.setValue("Bearer \(firebaseToken)", forHTTPHeaderField: "Authorization")
+        request.setValue("keep-alive", forHTTPHeaderField: "Connection")
+
+        do {
+            print("🗑️ DELETE HOME ITEM DEBUG:")
+            print("   🔗 URL: \(url.absoluteString)")
+            print("   🏠 Home ID: \(homeId)")
+            print("   📦 Item ID: \(itemId)")
+            print("   🔑 Token (first 20 chars): \(firebaseToken.prefix(20))...")
+            print("   📋 All headers: \(request.allHTTPHeaderFields ?? [:])")
+
+            let (data, response) = try await urlSession.data(for: request)
+
+            guard let httpResponse = response as? HTTPURLResponse else {
+                print("❌ Invalid delete home item response type")
+                throw APIError.networkError("Invalid response")
+            }
+
+            print("📱 Delete home item response status: \(httpResponse.statusCode)")
+            if !data.isEmpty, let responseString = String(data: data, encoding: .utf8) {
+                print("📄 Delete home item response body: \(responseString)")
+            }
+
+            switch httpResponse.statusCode {
+            case 204:
+                print("✅ Successfully deleted home item")
+                return
+
+            case 401:
+                throw APIError.unauthorized
+            case 403:
+                print("❌ Forbidden (403) - User doesn't have access to this home or item")
+                if let errorBody = String(data: data, encoding: .utf8), !errorBody.isEmpty {
+                    print("   Server error message: \(errorBody)")
+                }
+                throw APIError.forbidden
+            case 404:
+                print("❌ Not Found (404) - Home item not found")
+                throw APIError.networkError("Home item not found")
+            default:
+                print("❌ Server error (\(httpResponse.statusCode))")
+                if let errorBody = String(data: data, encoding: .utf8), !errorBody.isEmpty {
+                    print("   Server error message: \(errorBody)")
+                }
+                throw APIError.serverError(httpResponse.statusCode)
+            }
+
+        } catch {
+            if error is APIError {
+                throw error
+            } else {
+                throw APIError.networkError(error.localizedDescription)
+            }
+        }
+    }
+
+    func deletePhoto(photoId: String, firebaseToken: String) async throws {
+        guard let url = URL(string: "\(baseURL)/photos/\(photoId)") else {
+            throw APIError.invalidURL
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "DELETE"
+        request.setValue("application/json, text/plain, */*", forHTTPHeaderField: "Accept")
+        request.setValue("Bearer \(firebaseToken)", forHTTPHeaderField: "Authorization")
+        request.setValue("keep-alive", forHTTPHeaderField: "Connection")
+
+        do {
+            print("🗑️ DELETE PHOTO DEBUG:")
+            print("   🔗 URL: \(url.absoluteString)")
+            print("   📸 Photo ID: \(photoId)")
+            print("   🔑 Token (first 20 chars): \(firebaseToken.prefix(20))...")
+
+            let (data, response) = try await urlSession.data(for: request)
+
+            guard let httpResponse = response as? HTTPURLResponse else {
+                print("❌ Invalid delete photo response type")
+                throw APIError.networkError("Invalid response")
+            }
+
+            print("📱 Delete photo response status: \(httpResponse.statusCode)")
+            if !data.isEmpty, let responseString = String(data: data, encoding: .utf8) {
+                print("📄 Delete photo response body: \(responseString)")
+            }
+
+            switch httpResponse.statusCode {
+            case 204:
+                print("✅ Successfully deleted photo")
+                return
+
+            case 401:
+                print("❌ Unauthorized (401) - Invalid token")
+                throw APIError.unauthorized
+            case 403:
+                print("❌ Forbidden (403) - User doesn't have permission to delete this photo")
+                if let errorBody = String(data: data, encoding: .utf8), !errorBody.isEmpty {
+                    print("   Server error message: \(errorBody)")
+                }
+                throw APIError.forbidden
+            case 404:
+                print("❌ Not Found (404) - Photo not found")
+                throw APIError.networkError("Photo not found")
+            default:
+                print("❌ Server error (\(httpResponse.statusCode))")
+                if let errorBody = String(data: data, encoding: .utf8), !errorBody.isEmpty {
+                    print("   Server error message: \(errorBody)")
+                }
+                throw APIError.serverError(httpResponse.statusCode)
+            }
+
+        } catch {
+            if error is APIError {
+                throw error
+            } else {
+                throw APIError.networkError(error.localizedDescription)
+            }
+        }
+    }
+
+    func deleteHome(homeId: String, firebaseToken: String) async throws {
+        print("🗑️ Starting delete home request")
+        print("   🏠 Home ID: \(homeId)")
+
+        guard let url = URL(string: "\(baseURL)/homes/\(homeId)") else {
+            print("❌ Invalid URL for delete home")
+            throw APIError.invalidURL
+        }
+
+        print("🗑️ DELETE URL: \(url.absoluteString)")
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "DELETE"
+        request.setValue("Bearer \(firebaseToken)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+        print("🗑️ Request headers: \(request.allHTTPHeaderFields ?? [:])")
+
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+
+            guard let httpResponse = response as? HTTPURLResponse else {
+                print("❌ Invalid response type")
+                throw APIError.networkError("Invalid response from server")
+            }
+
+            print("🗑️ Response status code: \(httpResponse.statusCode)")
+
+            switch httpResponse.statusCode {
+            case 204:
+                print("✅ Home deleted successfully (204 No Content)")
+                return
+
+            case 401:
+                print("❌ Unauthorized (401) - Token may be invalid")
+                throw APIError.unauthorized
+
+            case 403:
+                print("❌ Forbidden (403) - User may not have permission")
+                throw APIError.forbidden
+
+            case 404:
+                print("❌ Not Found (404) - Home not found")
+                if let errorBody = String(data: data, encoding: .utf8), !errorBody.isEmpty {
+                    print("   Error details: \(errorBody)")
+                }
+                throw APIError.networkError("Home not found")
+
+            default:
+                print("❌ Server error (\(httpResponse.statusCode))")
+                if let errorBody = String(data: data, encoding: .utf8), !errorBody.isEmpty {
+                    print("   Server error message: \(errorBody)")
+                }
+                throw APIError.serverError(httpResponse.statusCode)
+            }
+
+        } catch {
+            if error is APIError {
+                throw error
+            } else {
+                throw APIError.networkError(error.localizedDescription)
+            }
+        }
+    }
+
+    func setPhotoPrimary(photoId: String, isPrimary: Bool, firebaseToken: String) async throws {
+        print("⭐ Starting set photo primary request")
+        print("   📷 Photo ID: \(photoId)")
+        print("   ⭐ Set Primary: \(isPrimary)")
+
+        guard let url = URL(string: "\(baseURL)/photos/\(photoId)/primary") else {
+            print("❌ Invalid URL for set photo primary")
+            throw APIError.invalidURL
+        }
+
+        print("⭐ PATCH URL: \(url.absoluteString)")
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "PATCH"
+        request.setValue("Bearer \(firebaseToken)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+        // Create request body
+        let requestBody: [String: Any] = ["isPrimary": isPrimary]
+        request.httpBody = try? JSONSerialization.data(withJSONObject: requestBody)
+
+        print("⭐ Request headers: \(request.allHTTPHeaderFields ?? [:])")
+        print("⭐ Request body: \(requestBody)")
+
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+
+            guard let httpResponse = response as? HTTPURLResponse else {
+                print("❌ Invalid response type")
+                throw APIError.networkError("Invalid response from server")
+            }
+
+            print("⭐ Response status code: \(httpResponse.statusCode)")
+
+            switch httpResponse.statusCode {
+            case 200:
+                print("✅ Photo primary status updated successfully")
+                if let responseString = String(data: data, encoding: .utf8), !responseString.isEmpty {
+                    print("   Response: \(responseString)")
+                }
+                return
+
+            case 400:
+                print("❌ Bad Request (400) - Invalid request body")
+                if let errorBody = String(data: data, encoding: .utf8), !errorBody.isEmpty {
+                    print("   Error details: \(errorBody)")
+                }
+                throw APIError.badRequest
+
+            case 401:
+                print("❌ Unauthorized (401) - Token may be invalid")
+                throw APIError.unauthorized
+
+            case 403:
+                print("❌ Forbidden (403) - User may not have permission")
+                throw APIError.forbidden
+
+            case 404:
+                print("❌ Not Found (404) - Photo not found")
+                if let errorBody = String(data: data, encoding: .utf8), !errorBody.isEmpty {
+                    print("   Error details: \(errorBody)")
+                }
+                throw APIError.networkError("Photo not found")
+
+            default:
+                print("❌ Server error (\(httpResponse.statusCode))")
+                if let errorBody = String(data: data, encoding: .utf8), !errorBody.isEmpty {
+                    print("   Server error message: \(errorBody)")
+                }
+                throw APIError.serverError(httpResponse.statusCode)
+            }
+
         } catch {
             if error is APIError {
                 throw error
