@@ -979,4 +979,397 @@ class APIService: ObservableObject {
             }
         }
     }
+
+    // MARK: - Notes API
+
+    func getNotes(homeId: String? = nil, homeItemId: String? = nil, firebaseToken: String) async throws -> [Note] {
+        var urlComponents = URLComponents(string: "\(baseURL)/notes")!
+        var queryItems: [URLQueryItem] = []
+
+        if let homeId = homeId {
+            queryItems.append(URLQueryItem(name: "homeId", value: homeId))
+        }
+        if let homeItemId = homeItemId {
+            queryItems.append(URLQueryItem(name: "homeItemId", value: homeItemId))
+        }
+
+        urlComponents.queryItems = queryItems
+
+        guard let url = urlComponents.url else {
+            throw APIError.invalidURL
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.setValue("application/json, text/plain, */*", forHTTPHeaderField: "Accept")
+        request.setValue("Bearer \(firebaseToken)", forHTTPHeaderField: "Authorization")
+        request.setValue("keep-alive", forHTTPHeaderField: "Connection")
+
+        do {
+            print("📝 Making notes request to: \(url.absoluteString)")
+            let (data, response) = try await urlSession.data(for: request)
+
+            guard let httpResponse = response as? HTTPURLResponse else {
+                print("❌ Invalid notes response type")
+                throw APIError.networkError("Invalid response")
+            }
+
+            print("📱 Notes response status: \(httpResponse.statusCode)")
+            if let responseString = String(data: data, encoding: .utf8) {
+                print("📄 Notes response body: \(responseString)")
+            }
+
+            switch httpResponse.statusCode {
+            case 200:
+                guard !data.isEmpty else {
+                    print("📭 No notes data received")
+                    return []
+                }
+
+                do {
+                    let notes = try JSONDecoder().decode([Note].self, from: data)
+                    print("✅ Successfully decoded \(notes.count) notes")
+                    return notes
+                } catch {
+                    print("❌ Notes decoding error: \(error)")
+                    print("📄 Raw notes data: \(String(data: data, encoding: .utf8) ?? "nil")")
+                    throw APIError.decodingError
+                }
+
+            case 401:
+                throw APIError.unauthorized
+            case 403:
+                throw APIError.forbidden
+            default:
+                throw APIError.serverError(httpResponse.statusCode)
+            }
+
+        } catch {
+            if error is APIError {
+                throw error
+            } else {
+                throw APIError.networkError(error.localizedDescription)
+            }
+        }
+    }
+
+    func createNote(request: CreateNoteRequest, firebaseToken: String) async throws -> Note {
+        guard let url = URL(string: "\(baseURL)/notes") else {
+            throw APIError.invalidURL
+        }
+
+        var urlRequest = URLRequest(url: url)
+        urlRequest.httpMethod = "POST"
+        urlRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        urlRequest.setValue("application/json, text/plain, */*", forHTTPHeaderField: "Accept")
+        urlRequest.setValue("Bearer \(firebaseToken)", forHTTPHeaderField: "Authorization")
+        urlRequest.setValue("keep-alive", forHTTPHeaderField: "Connection")
+
+        do {
+            let jsonData = try JSONEncoder().encode(request)
+            urlRequest.httpBody = jsonData
+
+            print("📝 Making create note request to: \(url.absoluteString)")
+            print("📄 Request body: \(String(data: jsonData, encoding: .utf8) ?? "nil")")
+
+            let (data, response) = try await urlSession.data(for: urlRequest)
+
+            guard let httpResponse = response as? HTTPURLResponse else {
+                print("❌ Invalid create note response type")
+                throw APIError.networkError("Invalid response")
+            }
+
+            print("📱 Create note response status: \(httpResponse.statusCode)")
+            if let responseString = String(data: data, encoding: .utf8) {
+                print("📄 Create note response body: \(responseString)")
+            }
+
+            switch httpResponse.statusCode {
+            case 201:
+                guard !data.isEmpty else {
+                    print("❌ No data received from create note")
+                    throw APIError.noData
+                }
+
+                do {
+                    let note = try JSONDecoder().decode(Note.self, from: data)
+                    print("✅ Successfully created note: \(note.id)")
+                    return note
+                } catch {
+                    print("❌ Create note decoding error: \(error)")
+                    print("📄 Raw create note data: \(String(data: data, encoding: .utf8) ?? "nil")")
+                    throw APIError.decodingError
+                }
+
+            case 400:
+                throw APIError.badRequest
+            case 401:
+                throw APIError.unauthorized
+            case 403:
+                throw APIError.forbidden
+            default:
+                throw APIError.serverError(httpResponse.statusCode)
+            }
+
+        } catch {
+            if error is APIError {
+                throw error
+            } else {
+                throw APIError.networkError(error.localizedDescription)
+            }
+        }
+    }
+
+    func updateNote(noteId: String, request: UpdateNoteRequest, firebaseToken: String) async throws -> Note {
+        guard let url = URL(string: "\(baseURL)/notes/\(noteId)") else {
+            throw APIError.invalidURL
+        }
+
+        var urlRequest = URLRequest(url: url)
+        urlRequest.httpMethod = "PUT"
+        urlRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        urlRequest.setValue("application/json, text/plain, */*", forHTTPHeaderField: "Accept")
+        urlRequest.setValue("Bearer \(firebaseToken)", forHTTPHeaderField: "Authorization")
+        urlRequest.setValue("keep-alive", forHTTPHeaderField: "Connection")
+
+        do {
+            let jsonData = try JSONEncoder().encode(request)
+            urlRequest.httpBody = jsonData
+
+            print("📝 Making update note request to: \(url.absoluteString)")
+            print("📄 Request body: \(String(data: jsonData, encoding: .utf8) ?? "nil")")
+
+            let (data, response) = try await urlSession.data(for: urlRequest)
+
+            guard let httpResponse = response as? HTTPURLResponse else {
+                print("❌ Invalid update note response type")
+                throw APIError.networkError("Invalid response")
+            }
+
+            print("📱 Update note response status: \(httpResponse.statusCode)")
+            if let responseString = String(data: data, encoding: .utf8) {
+                print("📄 Update note response body: \(responseString)")
+            }
+
+            switch httpResponse.statusCode {
+            case 200:
+                guard !data.isEmpty else {
+                    print("❌ No data received from update note")
+                    throw APIError.noData
+                }
+
+                do {
+                    let note = try JSONDecoder().decode(Note.self, from: data)
+                    print("✅ Successfully updated note: \(note.id)")
+                    return note
+                } catch {
+                    print("❌ Update note decoding error: \(error)")
+                    print("📄 Raw update note data: \(String(data: data, encoding: .utf8) ?? "nil")")
+                    throw APIError.decodingError
+                }
+
+            case 400:
+                throw APIError.badRequest
+            case 401:
+                throw APIError.unauthorized
+            case 403:
+                throw APIError.forbidden
+            case 404:
+                throw APIError.networkError("Note not found")
+            default:
+                throw APIError.serverError(httpResponse.statusCode)
+            }
+
+        } catch {
+            if error is APIError {
+                throw error
+            } else {
+                throw APIError.networkError(error.localizedDescription)
+            }
+        }
+    }
+
+    func deleteNote(noteId: String, firebaseToken: String) async throws {
+        guard let url = URL(string: "\(baseURL)/notes/\(noteId)") else {
+            throw APIError.invalidURL
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "DELETE"
+        request.setValue("application/json, text/plain, */*", forHTTPHeaderField: "Accept")
+        request.setValue("Bearer \(firebaseToken)", forHTTPHeaderField: "Authorization")
+        request.setValue("keep-alive", forHTTPHeaderField: "Connection")
+
+        do {
+            print("🗑️ DELETE NOTE DEBUG:")
+            print("   🔗 URL: \(url.absoluteString)")
+            print("   📝 Note ID: \(noteId)")
+            print("   🔑 Token (first 20 chars): \(firebaseToken.prefix(20))...")
+
+            let (data, response) = try await urlSession.data(for: request)
+
+            guard let httpResponse = response as? HTTPURLResponse else {
+                print("❌ Invalid delete note response type")
+                throw APIError.networkError("Invalid response")
+            }
+
+            print("📱 Delete note response status: \(httpResponse.statusCode)")
+            if !data.isEmpty, let responseString = String(data: data, encoding: .utf8) {
+                print("📄 Delete note response body: \(responseString)")
+            }
+
+            switch httpResponse.statusCode {
+            case 204:
+                print("✅ Successfully deleted note")
+                return
+
+            case 401:
+                throw APIError.unauthorized
+            case 403:
+                print("❌ Forbidden (403) - User doesn't have access to this note")
+                if let errorBody = String(data: data, encoding: .utf8), !errorBody.isEmpty {
+                    print("   Server error message: \(errorBody)")
+                }
+                throw APIError.forbidden
+            case 404:
+                print("❌ Not Found (404) - Note not found")
+                throw APIError.networkError("Note not found")
+            default:
+                print("❌ Server error (\(httpResponse.statusCode))")
+                if let errorBody = String(data: data, encoding: .utf8), !errorBody.isEmpty {
+                    print("   Server error message: \(errorBody)")
+                }
+                throw APIError.serverError(httpResponse.statusCode)
+            }
+
+        } catch {
+            if error is APIError {
+                throw error
+            } else {
+                throw APIError.networkError(error.localizedDescription)
+            }
+        }
+    }
+
+    func pinNote(noteId: String, firebaseToken: String) async throws -> Note {
+        guard let url = URL(string: "\(baseURL)/notes/\(noteId)/pin") else {
+            throw APIError.invalidURL
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json, text/plain, */*", forHTTPHeaderField: "Accept")
+        request.setValue("Bearer \(firebaseToken)", forHTTPHeaderField: "Authorization")
+        request.setValue("keep-alive", forHTTPHeaderField: "Connection")
+
+        do {
+            print("📌 Making pin note request to: \(url.absoluteString)")
+            let (data, response) = try await urlSession.data(for: request)
+
+            guard let httpResponse = response as? HTTPURLResponse else {
+                print("❌ Invalid pin note response type")
+                throw APIError.networkError("Invalid response")
+            }
+
+            print("📱 Pin note response status: \(httpResponse.statusCode)")
+            if let responseString = String(data: data, encoding: .utf8) {
+                print("📄 Pin note response body: \(responseString)")
+            }
+
+            switch httpResponse.statusCode {
+            case 200:
+                guard !data.isEmpty else {
+                    print("❌ No data received from pin note")
+                    throw APIError.noData
+                }
+
+                do {
+                    let note = try JSONDecoder().decode(Note.self, from: data)
+                    print("✅ Successfully pinned note: \(note.id)")
+                    return note
+                } catch {
+                    print("❌ Pin note decoding error: \(error)")
+                    print("📄 Raw pin note data: \(String(data: data, encoding: .utf8) ?? "nil")")
+                    throw APIError.decodingError
+                }
+
+            case 401:
+                throw APIError.unauthorized
+            case 403:
+                throw APIError.forbidden
+            case 404:
+                throw APIError.networkError("Note not found")
+            default:
+                throw APIError.serverError(httpResponse.statusCode)
+            }
+
+        } catch {
+            if error is APIError {
+                throw error
+            } else {
+                throw APIError.networkError(error.localizedDescription)
+            }
+        }
+    }
+
+    func unpinNote(noteId: String, firebaseToken: String) async throws -> Note {
+        guard let url = URL(string: "\(baseURL)/notes/\(noteId)/unpin") else {
+            throw APIError.invalidURL
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json, text/plain, */*", forHTTPHeaderField: "Accept")
+        request.setValue("Bearer \(firebaseToken)", forHTTPHeaderField: "Authorization")
+        request.setValue("keep-alive", forHTTPHeaderField: "Connection")
+
+        do {
+            print("📌 Making unpin note request to: \(url.absoluteString)")
+            let (data, response) = try await urlSession.data(for: request)
+
+            guard let httpResponse = response as? HTTPURLResponse else {
+                print("❌ Invalid unpin note response type")
+                throw APIError.networkError("Invalid response")
+            }
+
+            print("📱 Unpin note response status: \(httpResponse.statusCode)")
+            if let responseString = String(data: data, encoding: .utf8) {
+                print("📄 Unpin note response body: \(responseString)")
+            }
+
+            switch httpResponse.statusCode {
+            case 200:
+                guard !data.isEmpty else {
+                    print("❌ No data received from unpin note")
+                    throw APIError.noData
+                }
+
+                do {
+                    let note = try JSONDecoder().decode(Note.self, from: data)
+                    print("✅ Successfully unpinned note: \(note.id)")
+                    return note
+                } catch {
+                    print("❌ Unpin note decoding error: \(error)")
+                    print("📄 Raw unpin note data: \(String(data: data, encoding: .utf8) ?? "nil")")
+                    throw APIError.decodingError
+                }
+
+            case 401:
+                throw APIError.unauthorized
+            case 403:
+                throw APIError.forbidden
+            case 404:
+                throw APIError.networkError("Note not found")
+            default:
+                throw APIError.serverError(httpResponse.statusCode)
+            }
+
+        } catch {
+            if error is APIError {
+                throw error
+            } else {
+                throw APIError.networkError(error.localizedDescription)
+            }
+        }
+    }
 }

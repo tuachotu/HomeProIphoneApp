@@ -12,6 +12,7 @@ struct HomeCardView: View {
     @State private var photos: [Photo] = []
     @State private var isLoadingPhotos = false
     @State private var showingItemsList = false
+    @State private var showingNotesList = false
     @EnvironmentObject var authManager: AuthenticationManager
     
     var body: some View {
@@ -101,39 +102,59 @@ struct HomeCardView: View {
     }
     
     private var statsSection: some View {
-        Button(action: {
-            showingItemsList = true
-        }) {
-            HStack(spacing: DesignSystem.Spacing.lg) {
-                statItemContent(icon: "square.grid.3x3", value: "\(home.stats.totalItems)", label: "Items", color: DesignSystem.Colors.primary)
-                Spacer()
+        HStack(spacing: DesignSystem.Spacing.lg) {
+            // Items Button
+            Button(action: {
+                showingItemsList = true
+            }) {
+                actionButtonContent(icon: "square.grid.3x3", label: "Items", color: DesignSystem.Colors.primary)
             }
-        }
-        .buttonStyle(PlainButtonStyle())
-        .contentShape(Rectangle())
-        .sheet(isPresented: $showingItemsList) {
-            HomeItemsListView(home: home)
-                .environmentObject(authManager)
+            .buttonStyle(PlainButtonStyle())
+            .sheet(isPresented: $showingItemsList) {
+                HomeItemsListView(home: home)
+                    .environmentObject(authManager)
+            }
+
+            // Notes Button
+            Button(action: {
+                showingNotesList = true
+            }) {
+                actionButtonContent(icon: "note.text", label: "Notes", color: DesignSystem.Colors.accent)
+            }
+            .buttonStyle(PlainButtonStyle())
+            .sheet(isPresented: $showingNotesList) {
+                NavigationView {
+                    NoteListView(homeId: home.id, homeItemId: nil)
+                        .navigationTitle("Home Notes")
+                        .navigationBarTitleDisplayMode(.inline)
+                }
+            }
+
+            Spacer()
         }
     }
-    
-    
-    private func statItemContent(icon: String, value: String, label: String, color: Color) -> some View {
-        VStack(spacing: DesignSystem.Spacing.xs) {
-            HStack(spacing: DesignSystem.Spacing.xs) {
-                Image(systemName: icon)
-                    .foregroundColor(color)
-                    .font(.caption)
-                Text(value)
-                    .font(DesignSystem.Typography.callout)
-                    .fontWeight(.medium)
-                    .foregroundColor(DesignSystem.Colors.textPrimary)
-            }
-            
+
+    private func actionButtonContent(icon: String, label: String, color: Color) -> some View {
+        HStack(spacing: DesignSystem.Spacing.xs) {
+            Image(systemName: icon)
+                .foregroundColor(color)
+                .font(.system(size: 18))
+
             Text(label)
-                .font(DesignSystem.Typography.caption2)
-                .foregroundColor(DesignSystem.Colors.textTertiary)
+                .font(DesignSystem.Typography.callout)
+                .fontWeight(.medium)
+                .foregroundColor(DesignSystem.Colors.textPrimary)
         }
+        .padding(.horizontal, DesignSystem.Spacing.md)
+        .padding(.vertical, DesignSystem.Spacing.sm)
+        .background(
+            RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.sm)
+                .fill(color.opacity(0.1))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.sm)
+                .stroke(color.opacity(0.3), lineWidth: 1)
+        )
     }
     
     private func loadHomePhotos() {
