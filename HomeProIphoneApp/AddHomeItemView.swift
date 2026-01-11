@@ -189,6 +189,7 @@ struct AddHomeItemView: View {
                     data: nil,
                     createdAt: response.createdAt,
                     photoCount: 0,
+                    noteCount: 0,
                     primaryPhotoUrl: nil
                 )
                 

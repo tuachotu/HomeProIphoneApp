@@ -174,17 +174,19 @@ struct HomeItem: Codable, Identifiable {
     let data: AnyCodable?
     let createdAt: String
     let photoCount: Int
+    let noteCount: Int
     let primaryPhotoUrl: String?
-    
+
     enum CodingKeys: String, CodingKey {
         case id, name, type, data
         case isEmergency = "is_emergency"
         case createdAt = "created_at"
         case photoCount = "photo_count"
+        case noteCount = "note_count"
         case primaryPhotoUrl = "primary_photo_url"
     }
     
-    init(id: String, name: String, type: HomeItemType, isEmergency: Bool, data: [String: Any]?, createdAt: String, photoCount: Int, primaryPhotoUrl: String?) {
+    init(id: String, name: String, type: HomeItemType, isEmergency: Bool, data: [String: Any]?, createdAt: String, photoCount: Int, noteCount: Int = 0, primaryPhotoUrl: String?) {
         self.id = id
         self.name = name
         self.type = type
@@ -192,6 +194,7 @@ struct HomeItem: Codable, Identifiable {
         self.data = data.map(AnyCodable.init)
         self.createdAt = createdAt
         self.photoCount = photoCount
+        self.noteCount = noteCount
         self.primaryPhotoUrl = primaryPhotoUrl
     }
     
@@ -320,6 +323,122 @@ struct PhotoUploadResponse: Codable {
     }
 }
 
+enum NoteType: String, CaseIterable, Codable {
+    case general = "general"
+    case observation = "observation"
+    case todo = "todo"
+    case question = "question"
+
+    var displayName: String {
+        switch self {
+        case .general:
+            return "General"
+        case .observation:
+            return "Observation"
+        case .todo:
+            return "To Do"
+        case .question:
+            return "Question"
+        }
+    }
+
+    var iconName: String {
+        switch self {
+        case .general:
+            return "note.text"
+        case .observation:
+            return "eye"
+        case .todo:
+            return "checklist"
+        case .question:
+            return "questionmark.circle"
+        }
+    }
+
+    var color: String {
+        switch self {
+        case .general:
+            return "gray"
+        case .observation:
+            return "blue"
+        case .todo:
+            return "orange"
+        case .question:
+            return "purple"
+        }
+    }
+}
+
+struct Note: Codable, Identifiable {
+    let id: String
+    let homeId: String?
+    let homeItemId: String?
+    let title: String?
+    let body: String
+    let noteType: NoteType
+    let isPinned: Bool
+    let authorId: String
+    let createdBy: String
+    let createdAt: String
+    let updatedBy: String?
+    let updatedAt: String
+
+    enum CodingKeys: String, CodingKey {
+        case id, title, body
+        case homeId
+        case homeItemId
+        case noteType
+        case isPinned
+        case authorId
+        case createdBy
+        case createdAt
+        case updatedBy
+        case updatedAt
+    }
+}
+
+struct CreateNoteRequest: Codable {
+    let homeId: String?
+    let homeItemId: String?
+    let title: String?
+    let body: String
+    let noteType: String
+
+    enum CodingKeys: String, CodingKey {
+        case homeId
+        case homeItemId
+        case title
+        case body
+        case noteType
+    }
+
+    init(homeId: String? = nil, homeItemId: String? = nil, title: String? = nil, body: String, noteType: NoteType = .general) {
+        self.homeId = homeId
+        self.homeItemId = homeItemId
+        self.title = title
+        self.body = body
+        self.noteType = noteType.rawValue
+    }
+}
+
+struct UpdateNoteRequest: Codable {
+    let title: String?
+    let body: String?
+    let noteType: String?
+
+    enum CodingKeys: String, CodingKey {
+        case title
+        case body
+        case noteType
+    }
+
+    init(title: String? = nil, body: String? = nil, noteType: NoteType? = nil) {
+        self.title = title
+        self.body = body
+        self.noteType = noteType?.rawValue
+    }
+}
+
 enum APIError: Error, LocalizedError {
     case invalidURL
     case noData
@@ -329,7 +448,7 @@ enum APIError: Error, LocalizedError {
     case forbidden
     case badRequest
     case serverError(Int)
-    
+
     var errorDescription: String? {
         switch self {
         case .invalidURL:

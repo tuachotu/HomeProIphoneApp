@@ -446,6 +446,7 @@ struct PhotoViewerView: View {
                 data: nil,
                 createdAt: "2025-08-12T10:00:00",
                 photoCount: 3,
+                noteCount: 1,
                 primaryPhotoUrl: nil
             )
         )

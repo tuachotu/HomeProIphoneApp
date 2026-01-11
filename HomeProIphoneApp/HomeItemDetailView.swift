@@ -26,10 +26,13 @@ struct HomeItemDetailView: View {
             VStack(alignment: .leading, spacing: DesignSystem.Spacing.lg) {
                 // Photo section
                 photoSection
-                
+
                 // Item details section
                 itemDetailsSection
-                
+
+                // Notes section
+                notesSection
+
                 // Additional data section
                 if let dataDict = homeItem.dataDict, !dataDict.isEmpty {
                     additionalDataSection
@@ -284,22 +287,29 @@ struct HomeItemDetailView: View {
             Text("Item Details")
                 .font(DesignSystem.Typography.title2)
                 .foregroundColor(DesignSystem.Colors.textPrimary)
-            
+
             VStack(alignment: .leading, spacing: DesignSystem.Spacing.sm) {
                 DetailRow(label: "Type", value: homeItem.type.displayName, icon: homeItem.type.iconName)
                 DetailRow(label: "Home", value: home.address ?? "Unknown", icon: "house")
                 DetailRow(label: "Created", value: formatDate(homeItem.createdAt), icon: "calendar")
-                
+
                 if homeItem.isEmergency {
                     DetailRow(label: "Status", value: "Emergency Item", icon: "exclamationmark.triangle.fill", valueColor: DesignSystem.Colors.error)
                 }
-                
+
                 if homeItem.photoCount > 0 {
                     DetailRow(label: "Photos", value: "\(homeItem.photoCount) photo\(homeItem.photoCount == 1 ? "" : "s")", icon: "photo")
                 }
             }
         }
         .padding(DesignSystem.Spacing.md)
+        .cardStyle()
+    }
+
+    private var notesSection: some View {
+        VStack(spacing: 0) {
+            NoteListView(homeId: nil, homeItemId: homeItem.id)
+        }
         .cardStyle()
     }
     
@@ -968,6 +978,7 @@ struct FullScreenPhotoView: View {
                 data: ["brand": "Samsung", "model": "RF28T5001SG"],
                 createdAt: "2025-08-01T10:00:00",
                 photoCount: 3,
+                noteCount: 2,
                 primaryPhotoUrl: nil
             ),
             home: Home(

@@ -27,10 +27,13 @@ struct HomeDetailView: View {
             VStack(spacing: DesignSystem.Spacing.xl) {
                 // Home Header
                 homeHeaderSection
-                
+
+                // Notes Section
+                notesSection
+
                 // Home Items Section
                 homeItemsSection
-                
+
                 Spacer(minLength: DesignSystem.Spacing.xxl)
             }
             .padding(.horizontal, DesignSystem.Spacing.lg)
@@ -103,7 +106,7 @@ struct HomeDetailView: View {
         VStack(spacing: DesignSystem.Spacing.md) {
             // Home Icon
             HouseIconView(size: 48, systemName: "house.fill")
-            
+
             // Home Information
             VStack(spacing: DesignSystem.Spacing.xs) {
                 Text(home.address ?? "Home")
@@ -111,7 +114,7 @@ struct HomeDetailView: View {
                     .fontWeight(.bold)
                     .foregroundColor(DesignSystem.Colors.textPrimary)
                     .multilineTextAlignment(.center)
-                
+
                 HStack(spacing: DesignSystem.Spacing.xs) {
                     Image(systemName: "person.circle.fill")
                         .foregroundColor(DesignSystem.Colors.primary)
@@ -121,7 +124,7 @@ struct HomeDetailView: View {
                         .foregroundColor(DesignSystem.Colors.textSecondary)
                 }
             }
-            
+
             // Statistics
             HStack(spacing: DesignSystem.Spacing.lg) {
                 StatCardView(
@@ -130,14 +133,14 @@ struct HomeDetailView: View {
                     icon: "cube.box",
                     color: DesignSystem.Colors.primary
                 )
-                
+
                 StatCardView(
                     title: "Photos",
                     value: "\(home.stats.totalPhotos)",
                     icon: "photo",
                     color: DesignSystem.Colors.secondary
                 )
-                
+
                 StatCardView(
                     title: "Emergency",
                     value: "\(home.stats.emergencyItems)",
@@ -147,6 +150,13 @@ struct HomeDetailView: View {
             }
         }
         .padding(DesignSystem.Spacing.lg)
+        .cardStyle()
+    }
+
+    private var notesSection: some View {
+        VStack(spacing: 0) {
+            NoteListView(homeId: home.id, homeItemId: nil)
+        }
         .cardStyle()
     }
     

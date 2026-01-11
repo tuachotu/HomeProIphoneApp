@@ -690,6 +690,7 @@ enum PhotoUploadError: Error, LocalizedError {
             data: nil,
             createdAt: "2025-08-01T10:00:00",
             photoCount: 0,
+            noteCount: 0,
             primaryPhotoUrl: nil
         ),
         onPhotosUploaded: {}
