@@ -497,6 +497,141 @@ class APIService: ObservableObject {
         }
     }
     
+    func uploadPhotoForHome(homeId: String, imageData: Data, fileName: String, firebaseToken: String) async throws -> PhotoUploadResponse {
+        guard let url = URL(string: "\(baseURL)/photos?homeId=\(homeId)") else {
+            throw APIError.invalidURL
+        }
+
+        // Create a more standard boundary format
+        let boundary = "----WebKitFormBoundary\(UUID().uuidString.replacingOccurrences(of: "-", with: ""))"
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+        request.setValue("Bearer \(firebaseToken)", forHTTPHeaderField: "Authorization")
+
+        // Determine content type based on file extension (defaulting to JPEG like most camera photos)
+        let contentType: String
+        if fileName.lowercased().hasSuffix(".png") {
+            contentType = "image/png"
+        } else if fileName.lowercased().hasSuffix(".gif") {
+            contentType = "image/gif"
+        } else if fileName.lowercased().hasSuffix(".webp") {
+            contentType = "image/webp"
+        } else {
+            contentType = "image/jpeg"
+        }
+
+        // Create multipart form data exactly like curl -F does
+        var body = Data()
+
+        // Opening boundary
+        body.append("--\(boundary)\r\n".data(using: .utf8)!)
+
+        // Form field headers - exactly matching curl format
+        body.append("Content-Disposition: form-data; name=\"photo\"; filename=\"\(fileName)\"\r\n".data(using: .utf8)!)
+        body.append("Content-Type: \(contentType)\r\n".data(using: .utf8)!)
+        body.append("\r\n".data(using: .utf8)!)
+
+        // File content
+        body.append(imageData)
+
+        // Closing boundary
+        body.append("\r\n--\(boundary)--\r\n".data(using: .utf8)!)
+
+        request.httpBody = body
+
+        print("📸 Home photo upload details:")
+        print("   🔗 URL: \(url.absoluteString)")
+        print("   📝 Filename: \(fileName)")
+        print("   📄 Content-Type: \(contentType)")
+        print("   📦 Image data size: \(imageData.count) bytes")
+        print("   📦 Total body size: \(body.count) bytes")
+        print("   🔖 Boundary: \(boundary)")
+        print("   🔑 Auth token: Bearer \(firebaseToken.prefix(10))...")
+
+        do {
+            print("📸 Making upload home photo request to: \(url.absoluteString)")
+            print("📄 Uploading file: \(fileName) (\(imageData.count) bytes)")
+
+            let (data, response) = try await urlSession.data(for: request)
+
+            guard let httpResponse = response as? HTTPURLResponse else {
+                print("❌ Invalid upload home photo response type")
+                throw APIError.networkError("Invalid response")
+            }
+
+            print("📱 Upload home photo response status: \(httpResponse.statusCode)")
+            print("📄 Response headers: \(httpResponse.allHeaderFields)")
+
+            if let responseString = String(data: data, encoding: .utf8) {
+                print("📄 Upload home photo response body: \(responseString)")
+            } else {
+                print("📄 Upload home photo response body: <binary or empty data>")
+            }
+
+            switch httpResponse.statusCode {
+            case 200, 201:
+                guard !data.isEmpty else {
+                    print("❌ No data received from upload home photo")
+                    throw APIError.noData
+                }
+
+                do {
+                    let uploadResponse = try JSONDecoder().decode(PhotoUploadResponse.self, from: data)
+                    print("✅ Successfully uploaded home photo: \(uploadResponse)")
+                    return uploadResponse
+                } catch {
+                    print("❌ Upload home photo decoding error: \(error)")
+                    if let decodingError = error as? DecodingError {
+                        print("❌ Specific decoding error: \(decodingError)")
+                    }
+                    print("📄 Raw upload home photo data: \(String(data: data, encoding: .utf8) ?? "nil")")
+                    throw APIError.decodingError
+                }
+
+            case 400:
+                print("❌ Bad Request (400) - Check request format")
+                if let errorBody = String(data: data, encoding: .utf8), !errorBody.isEmpty {
+                    print("   Server error message: \(errorBody)")
+                }
+                throw APIError.badRequest
+            case 401:
+                print("❌ Unauthorized (401) - Check authentication token")
+                throw APIError.unauthorized
+            case 403:
+                print("❌ Forbidden (403) - Check permissions")
+                throw APIError.forbidden
+            case 413:
+                print("❌ Payload Too Large (413) - Image might be too big")
+                throw APIError.networkError("Image file is too large")
+            case 415:
+                print("❌ Unsupported Media Type (415) - Check image format")
+                throw APIError.networkError("Unsupported image format")
+            case 422:
+                print("❌ Unprocessable Entity (422) - Validation error")
+                if let errorBody = String(data: data, encoding: .utf8), !errorBody.isEmpty {
+                    print("   Server validation error: \(errorBody)")
+                }
+                throw APIError.networkError("Validation error: \(String(data: data, encoding: .utf8) ?? "Unknown error")")
+            default:
+                print("❌ Server error (\(httpResponse.statusCode))")
+                if let errorBody = String(data: data, encoding: .utf8), !errorBody.isEmpty {
+                    print("   Server error message: \(errorBody)")
+                }
+                throw APIError.serverError(httpResponse.statusCode)
+            }
+
+        } catch {
+            print("❌ Network or other error during home photo upload: \(error)")
+            if error is APIError {
+                throw error
+            } else {
+                print("❌ Raw error details: \(error)")
+                throw APIError.networkError(error.localizedDescription)
+            }
+        }
+    }
+
     func uploadPhotoForHomeItem(homeItemId: String, imageData: Data, fileName: String, firebaseToken: String) async throws -> PhotoUploadResponse {
         guard let url = URL(string: "\(baseURL)/photos?homeItemId=\(homeItemId)") else {
             throw APIError.invalidURL
@@ -638,12 +773,12 @@ class APIService: ObservableObject {
         }
     }
     
-    func createHome(address: String, role: String = "owner", firebaseToken: String) async throws -> CreateHomeResponse {
+    func createHome(name: String, address: String?, metadata: [String: String]?, firebaseToken: String) async throws -> CreateHomeResponse {
         guard let url = URL(string: "\(baseURL)/homes") else {
             throw APIError.invalidURL
         }
 
-        let requestBody = CreateHomeRequest(address: address, role: role)
+        let requestBody = CreateHomeRequest(name: name, address: address, metadata: metadata)
 
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
@@ -689,12 +824,26 @@ class APIService: ObservableObject {
                 }
 
             case 400:
+                print("❌ Bad Request (400) - Invalid input")
+                if let errorBody = String(data: data, encoding: .utf8), !errorBody.isEmpty {
+                    print("   Server error message: \(errorBody)")
+                }
                 throw APIError.badRequest
             case 401:
                 throw APIError.unauthorized
             case 403:
                 throw APIError.forbidden
+            case 409:
+                print("❌ Conflict (409) - User already has a home")
+                if let errorBody = String(data: data, encoding: .utf8), !errorBody.isEmpty {
+                    print("   Server error message: \(errorBody)")
+                }
+                throw APIError.serverError(409)
             default:
+                print("❌ Server error (\(httpResponse.statusCode))")
+                if let errorBody = String(data: data, encoding: .utf8), !errorBody.isEmpty {
+                    print("   Server error message: \(errorBody)")
+                }
                 throw APIError.serverError(httpResponse.statusCode)
             }
 

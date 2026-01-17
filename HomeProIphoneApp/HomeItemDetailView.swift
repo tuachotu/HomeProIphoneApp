@@ -80,7 +80,7 @@ struct HomeItemDetailView: View {
             .environmentObject(authManager)
         }
         .sheet(isPresented: $showingPhotoUpload) {
-            PhotoUploadView(homeItem: homeItem) {
+            PhotoUploadView(context: .homeItem(homeItem)) {
                 // Refresh photos after upload
                 loadPhotos()
             }
@@ -983,6 +983,7 @@ struct FullScreenPhotoView: View {
             ),
             home: Home(
                 id: "preview-home-id",
+                name: "My Family Home",
                 address: "123 Main Street",
                 role: "owner",
                 createdAt: "2025-08-01T10:00:00",

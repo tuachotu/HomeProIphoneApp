@@ -381,6 +381,7 @@ struct EmergencyItemRowView: View {
     EmergencyInfoView(
         home: Home(
             id: "1",
+            name: "My Family Home",
             address: "123 Main Street, Portland OR",
             role: "owner",
             createdAt: "",

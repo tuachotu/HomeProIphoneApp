@@ -20,6 +20,7 @@ struct HomeDetailView: View {
     @State private var isDeleting = false
     @State private var deleteError: String?
     @State private var showingAllItems = false
+    @State private var showingPhotoUpload = false
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -77,6 +78,13 @@ struct HomeDetailView: View {
         }) {
             HomeItemsListView(home: home)
                 .environmentObject(authManager)
+        }
+        .sheet(isPresented: $showingPhotoUpload) {
+            PhotoUploadView(context: .home(home)) {
+                // Refresh data after upload
+                loadHomeItems()
+            }
+            .environmentObject(authManager)
         }
         .alert("Delete Home", isPresented: $showingDeleteConfirmation) {
             Button("Cancel", role: .cancel) { }
@@ -146,6 +154,23 @@ struct HomeDetailView: View {
                     value: "\(home.stats.emergencyItems)",
                     icon: "exclamationmark.triangle",
                     color: DesignSystem.Colors.error
+                )
+            }
+
+            // Upload Photo Button
+            Button(action: { showingPhotoUpload = true }) {
+                HStack(spacing: DesignSystem.Spacing.sm) {
+                    Image(systemName: "camera.fill")
+                    Text("Upload Photo")
+                }
+                .font(DesignSystem.Typography.callout)
+                .fontWeight(.semibold)
+                .foregroundColor(.white)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, DesignSystem.Spacing.md)
+                .background(
+                    RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.md)
+                        .fill(DesignSystem.Colors.primary)
                 )
             }
         }
@@ -531,6 +556,7 @@ struct HomeItemCardView: View {
         HomeDetailView(
             home: Home(
                 id: "1",
+                name: "My Family Home",
                 address: "123 Main Street, Portland OR",
                 role: "owner",
                 createdAt: "2025-08-01T10:00:00",

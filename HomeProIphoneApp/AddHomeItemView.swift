@@ -369,6 +369,7 @@ struct FormFieldView: View {
     AddHomeItemView(
         home: Home(
             id: "1",
+            name: "My Family Home",
             address: "123 Main Street, Portland OR",
             role: "owner",
             createdAt: "2025-08-01T10:00:00",
