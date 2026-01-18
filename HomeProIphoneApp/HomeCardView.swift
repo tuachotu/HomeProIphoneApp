@@ -33,7 +33,7 @@ struct HomeCardView: View {
         }
         .buttonStyle(PlainButtonStyle())
         .onAppear {
-            print("🏠 HomeCardView appeared for home: \(home.address ?? "Unknown")")
+            print("🏠 HomeCardView appeared for home: \(home.name ?? "Unknown")")
             loadHomePhotos()
         }
     }
@@ -85,11 +85,21 @@ struct HomeCardView: View {
     
     private var homeInfoSection: some View {
         VStack(alignment: .leading, spacing: DesignSystem.Spacing.xs) {
-            Text(home.address ?? "Home")
+            // Home name (primary)
+            Text(home.name ?? "My Home")
                 .font(DesignSystem.Typography.headline)
                 .foregroundColor(DesignSystem.Colors.textPrimary)
-                .lineLimit(2)
-            
+                .lineLimit(1)
+
+            // Address (if available)
+            if let address = home.address, !address.isEmpty {
+                Text(address)
+                    .font(DesignSystem.Typography.caption)
+                    .foregroundColor(DesignSystem.Colors.textSecondary)
+                    .lineLimit(2)
+            }
+
+            // Role badge
             HStack(spacing: DesignSystem.Spacing.xs) {
                 Image(systemName: "person.fill")
                     .foregroundColor(DesignSystem.Colors.primary)

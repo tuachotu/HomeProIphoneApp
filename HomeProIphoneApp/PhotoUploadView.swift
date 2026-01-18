@@ -9,8 +9,49 @@ import SwiftUI
 import PhotosUI
 import AVFoundation
 
+enum PhotoUploadContext {
+    case home(Home)
+    case homeItem(HomeItem)
+
+    var displayName: String {
+        switch self {
+        case .home(let home):
+            return home.name ?? home.address ?? "Home"
+        case .homeItem(let item):
+            return item.name
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .home:
+            return "house.fill"
+        case .homeItem(let item):
+            return item.type.iconName
+        }
+    }
+
+    var contextDescription: String {
+        switch self {
+        case .home:
+            return "home"
+        case .homeItem:
+            return "home item"
+        }
+    }
+
+    var id: String {
+        switch self {
+        case .home(let home):
+            return home.id
+        case .homeItem(let item):
+            return item.id
+        }
+    }
+}
+
 struct PhotoUploadView: View {
-    let homeItem: HomeItem
+    let context: PhotoUploadContext
     let onPhotosUploaded: () -> Void
 
     @State private var selectedPhotos: [PhotosPickerItem] = []
@@ -121,20 +162,20 @@ struct PhotoUploadView: View {
     private var headerSection: some View {
         VStack(spacing: DesignSystem.Spacing.md) {
             HStack(spacing: DesignSystem.Spacing.md) {
-                Image(systemName: homeItem.type.iconName)
+                Image(systemName: context.icon)
                     .font(.title2)
                     .foregroundColor(DesignSystem.Colors.primary)
-                
+
                 VStack(alignment: .leading, spacing: DesignSystem.Spacing.xs) {
-                    Text("Uploading photos to:")
+                    Text("Uploading photos to \(context.contextDescription):")
                         .font(DesignSystem.Typography.caption)
                         .foregroundColor(DesignSystem.Colors.textSecondary)
-                    
-                    Text(homeItem.name)
+
+                    Text(context.displayName)
                         .font(DesignSystem.Typography.headline)
                         .foregroundColor(DesignSystem.Colors.textPrimary)
                 }
-                
+
                 Spacer()
             }
         }
@@ -323,8 +364,8 @@ struct PhotoUploadView: View {
                 )
             }
             .disabled(selectedImages.isEmpty)
-            
-            Text("Photos will be uploaded to the server and associated with this home item.")
+
+            Text("Photos will be uploaded to the server and associated with this \(context.contextDescription).")
                 .font(DesignSystem.Typography.caption)
                 .foregroundColor(DesignSystem.Colors.textTertiary)
                 .multilineTextAlignment(.center)
@@ -396,8 +437,8 @@ struct PhotoUploadView: View {
             do {
                 print("🔐 Getting Firebase token for photo upload...")
                 let firebaseToken = try await firebaseUser.getIDToken()
-                
-                print("📸 Starting upload of \(selectedImages.count) photos to item: \(homeItem.id)")
+
+                print("📸 Starting upload of \(selectedImages.count) photos to \(context.contextDescription): \(context.id)")
                 
                 // Upload photos concurrently but with some throttling
                 await withTaskGroup(of: Void.self) { group in
@@ -481,17 +522,29 @@ struct PhotoUploadView: View {
             
             // Upload to API
             print("📸 About to call API for photo \(index + 1)")
-            print("   🏠 Home item ID: \(homeItem.id)")
+            print("   🏠 Context: \(context.contextDescription)")
+            print("   🆔 ID: \(context.id)")
             print("   📁 Filename: \(filename)")
             print("   📦 Data size: \(processedImageData.count) bytes")
-            
-            let response = try await APIService.shared.uploadPhotoForHomeItem(
-                homeItemId: homeItem.id,
-                imageData: processedImageData,
-                fileName: filename,
-                firebaseToken: firebaseToken
-            )
-            
+
+            let response: PhotoUploadResponse
+            switch context {
+            case .home(let home):
+                response = try await APIService.shared.uploadPhotoForHome(
+                    homeId: home.id,
+                    imageData: processedImageData,
+                    fileName: filename,
+                    firebaseToken: firebaseToken
+                )
+            case .homeItem(let item):
+                response = try await APIService.shared.uploadPhotoForHomeItem(
+                    homeItemId: item.id,
+                    imageData: processedImageData,
+                    fileName: filename,
+                    firebaseToken: firebaseToken
+                )
+            }
+
             print("📸 API call completed for photo \(index + 1), got response: \(response)")
             
             await MainActor.run {
@@ -682,7 +735,7 @@ enum PhotoUploadError: Error, LocalizedError {
 
 #Preview {
     PhotoUploadView(
-        homeItem: HomeItem(
+        context: .homeItem(HomeItem(
             id: "preview-item-id",
             name: "Kitchen Refrigerator",
             type: .appliance,
@@ -692,7 +745,7 @@ enum PhotoUploadError: Error, LocalizedError {
             photoCount: 0,
             noteCount: 0,
             primaryPhotoUrl: nil
-        ),
+        )),
         onPhotosUploaded: {}
     )
     .environmentObject(AuthenticationManager())

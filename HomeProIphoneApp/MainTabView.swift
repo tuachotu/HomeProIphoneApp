@@ -119,7 +119,8 @@ struct MainTabView: View {
     private var defaultHome: Home {
         Home(
             id: "default",
-            address: "Loading...",
+            name: "Loading...",
+            address: nil,
             role: "owner",
             createdAt: "",
             updatedAt: "",

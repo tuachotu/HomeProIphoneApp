@@ -45,14 +45,15 @@ struct HomeStats: Codable {
 
 struct Home: Codable, Identifiable {
     let id: String
+    let name: String?
     let address: String?
     let role: String
     let createdAt: String
     let updatedAt: String
     let stats: HomeStats
-    
+
     enum CodingKeys: String, CodingKey {
-        case id, address, role, stats
+        case id, name, address, role, stats
         case createdAt = "created_at"
         case updatedAt = "updated_at"
     }
@@ -286,24 +287,25 @@ struct CreateHomeItemResponse: Codable {
 }
 
 struct CreateHomeRequest: Codable {
-    let address: String
-    let role: String
-    
+    let name: String
+    let address: String?
+    let metadata: [String: String]?
+
     enum CodingKeys: String, CodingKey {
-        case address, role
+        case name, address, metadata
     }
 }
 
 struct CreateHomeResponse: Codable {
     let id: String
-    let address: String
-    let role: String
+    let name: String
+    let address: String?
+    let isPrimary: Bool
     let createdAt: String
     let message: String
-    
+
     enum CodingKeys: String, CodingKey {
-        case id, address, role, message
-        case createdAt = "created_at"
+        case id, name, address, isPrimary, message, createdAt
     }
 }
 

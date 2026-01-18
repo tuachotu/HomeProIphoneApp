@@ -9,21 +9,15 @@ import SwiftUI
 
 struct AddHomeView: View {
     let onHomeAdded: () -> Void
-    
+
+    @State private var homeName: String = ""
     @State private var address: String = ""
-    @State private var selectedRole: String = "owner"
     @State private var isCreatingHome = false
     @State private var errorMessage: String?
     @State private var showingSuccess = false
-    
+
     @EnvironmentObject var authManager: AuthenticationManager
     @Environment(\.dismiss) private var dismiss
-    
-    private let roles = [
-        ("owner", "Owner"),
-        ("tenant", "Tenant"),
-        ("manager", "Property Manager")
-    ]
     
     var body: some View {
         NavigationView {
@@ -79,13 +73,13 @@ struct AddHomeView: View {
             Image(systemName: "house.badge.plus")
                 .font(.system(size: 64))
                 .foregroundColor(DesignSystem.Colors.primary)
-            
+
             VStack(spacing: DesignSystem.Spacing.sm) {
                 Text("Add Your Home")
                     .font(DesignSystem.Typography.title2)
                     .foregroundColor(DesignSystem.Colors.textPrimary)
-                
-                Text("Enter your home's address and select your role to get started with home management.")
+
+                Text("Give your home a name and optionally add the address to get started with home management.")
                     .font(DesignSystem.Typography.body)
                     .foregroundColor(DesignSystem.Colors.textSecondary)
                     .multilineTextAlignment(.center)
@@ -97,56 +91,38 @@ struct AddHomeView: View {
     
     private var formSection: some View {
         VStack(alignment: .leading, spacing: DesignSystem.Spacing.lg) {
-            // Address field
+            // Home Name field (required)
             VStack(alignment: .leading, spacing: DesignSystem.Spacing.sm) {
-                Text("Home Address")
-                    .font(DesignSystem.Typography.headline)
-                    .foregroundColor(DesignSystem.Colors.textPrimary)
-                
-                TextField("Enter your home address", text: $address)
+                HStack {
+                    Text("Home Name")
+                        .font(DesignSystem.Typography.headline)
+                        .foregroundColor(DesignSystem.Colors.textPrimary)
+
+                    Text("*")
+                        .font(DesignSystem.Typography.headline)
+                        .foregroundColor(.red)
+                }
+
+                TextField("e.g., My Family Home, Beach House", text: $homeName)
                     .inputFieldStyle()
                     .disabled(isCreatingHome)
-                
-                Text("Enter the complete address including street, city, state, and zip code.")
+
+                Text("Give your home a memorable name to easily identify it.")
                     .font(DesignSystem.Typography.caption)
                     .foregroundColor(DesignSystem.Colors.textTertiary)
             }
-            
-            // Role selection
+
+            // Address field (optional)
             VStack(alignment: .leading, spacing: DesignSystem.Spacing.sm) {
-                Text("Your Role")
+                Text("Home Address (Optional)")
                     .font(DesignSystem.Typography.headline)
                     .foregroundColor(DesignSystem.Colors.textPrimary)
-                
-                VStack(spacing: DesignSystem.Spacing.xs) {
-                    ForEach(roles, id: \.0) { role in
-                        Button(action: {
-                            selectedRole = role.0
-                        }) {
-                            HStack {
-                                Image(systemName: selectedRole == role.0 ? "checkmark.circle.fill" : "circle")
-                                    .foregroundColor(selectedRole == role.0 ? DesignSystem.Colors.primary : DesignSystem.Colors.textTertiary)
-                                
-                                Text(role.1)
-                                    .font(DesignSystem.Typography.callout)
-                                    .foregroundColor(DesignSystem.Colors.textPrimary)
-                                
-                                Spacer()
-                            }
-                            .padding(.vertical, DesignSystem.Spacing.sm)
-                            .padding(.horizontal, DesignSystem.Spacing.md)
-                            .background(
-                                RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.sm)
-                                    .fill(selectedRole == role.0 ? DesignSystem.Colors.primary.opacity(0.1) : Color.clear)
-                                    .stroke(selectedRole == role.0 ? DesignSystem.Colors.primary : DesignSystem.Colors.border, lineWidth: 1)
-                            )
-                        }
-                        .buttonStyle(PlainButtonStyle())
-                        .disabled(isCreatingHome)
-                    }
-                }
-                
-                Text("Select your relationship to this property.")
+
+                TextField("Enter your home address", text: $address)
+                    .inputFieldStyle()
+                    .disabled(isCreatingHome)
+
+                Text("Enter the complete address including street, city, state, and zip code.")
                     .font(DesignSystem.Typography.caption)
                     .foregroundColor(DesignSystem.Colors.textTertiary)
             }
@@ -172,9 +148,9 @@ struct AddHomeView: View {
                         .fill(DesignSystem.Colors.primary)
                 )
             }
-            .disabled(address.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-            .opacity(address.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? 0.6 : 1.0)
-            
+            .disabled(homeName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            .opacity(homeName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? 0.6 : 1.0)
+
             Text("This will create a new home in your account that you can start managing immediately.")
                 .font(DesignSystem.Typography.caption)
                 .foregroundColor(DesignSystem.Colors.textTertiary)
@@ -208,51 +184,56 @@ struct AddHomeView: View {
     }
     
     private func createHome() {
+        let trimmedName = homeName.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedAddress = address.trimmingCharacters(in: .whitespacesAndNewlines)
-        
-        guard !trimmedAddress.isEmpty else {
-            errorMessage = "Please enter a valid address"
+
+        guard !trimmedName.isEmpty else {
+            errorMessage = "Please enter a home name"
             return
         }
-        
+
         guard let firebaseUser = authManager.user else {
             errorMessage = "Authentication required"
             return
         }
-        
+
         isCreatingHome = true
         errorMessage = nil
-        
+
         Task {
             do {
                 print("🔐 Getting Firebase token for home creation...")
                 let firebaseToken = try await firebaseUser.getIDToken()
-                
-                print("🏠 Creating new home with address: \(trimmedAddress) and role: \(selectedRole)")
-                
+
+                print("🏠 Creating new home with name: \(trimmedName)")
+                if !trimmedAddress.isEmpty {
+                    print("   Address: \(trimmedAddress)")
+                }
+
                 let response = try await APIService.shared.createHome(
-                    address: trimmedAddress,
-                    role: selectedRole,
+                    name: trimmedName,
+                    address: trimmedAddress.isEmpty ? nil : trimmedAddress,
+                    metadata: nil,
                     firebaseToken: firebaseToken
                 )
-                
+
                 print("✅ Successfully created home: \(response)")
-                
+
                 await MainActor.run {
                     isCreatingHome = false
                     showingSuccess = true
-                    
+
                     // Refresh homes list in the auth manager
                     Task {
                         await authManager.refreshHomes()
                     }
                 }
-                
+
             } catch {
                 await MainActor.run {
                     print("❌ Error creating home: \(error)")
                     isCreatingHome = false
-                    
+
                     if let apiError = error as? APIError {
                         switch apiError {
                         case .badRequest:
@@ -262,7 +243,11 @@ struct AddHomeView: View {
                         case .forbidden:
                             errorMessage = "You don't have permission to create homes."
                         case .serverError(let code):
-                            errorMessage = "Server error (\(code)). Please try again later."
+                            if code == 409 {
+                                errorMessage = "You already have a home. Only one home per user is currently allowed."
+                            } else {
+                                errorMessage = "Server error (\(code)). Please try again later."
+                            }
                         default:
                             errorMessage = apiError.localizedDescription
                         }
